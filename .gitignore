@@ -14,3 +14,7 @@ descargas/
 
 # Registros de rescates
 rescatemtk-*.txt
+
+# Genera MTKClient al ejecutarse
+hwparam.json
+.state
