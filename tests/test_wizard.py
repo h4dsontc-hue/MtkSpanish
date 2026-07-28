@@ -317,6 +317,85 @@ class TestPasoFlash:
         assert "boot" in resumen and "super" in resumen
         assert "MTKClient" in resumen
 
+    def test_backup_activado_por_defecto_en_brom(self, wizard, tmp_path):
+        paso = self._preparar(wizard, tmp_path, MODO_BROM)
+        assert paso.variable_backup.get() is True
+        assert paso.check_backup.cget("state") == "normal"
+
+    def test_backup_no_disponible_en_fastboot(self, wizard, tmp_path):
+        paso = self._preparar(wizard, tmp_path, MODO_FASTBOOT)
+        assert paso.variable_backup.get() is False
+        assert paso.check_backup.cget("state") == "disabled"
+
+    def test_con_backup_respalda_antes_de_flashear(self, wizard, tmp_path, monkeypatch):
+        import time
+
+        from core import herramientas
+
+        orden = []
+        monkeypatch.setattr(herramientas, "particiones_a_respaldar", lambda: ["nvram"])
+
+        def respaldar_falso(destino, particiones, al_terminar=None, **k):
+            orden.append("backup")
+            # Simula que la copia termina bien.
+            if al_terminar:
+                al_terminar(0)
+            from core import mtk
+
+            return mtk.SeguimientoFlash()
+
+        monkeypatch.setattr(herramientas, "respaldar", respaldar_falso)
+        monkeypatch.setattr(
+            wizard.pasos[3], "_flashear_por_brom",
+            lambda: orden.append("flash"),
+        )
+
+        DIALOGOS.respuesta_si_no = True
+        paso = self._preparar(wizard, tmp_path, MODO_BROM)
+        paso.variable_backup.set(True)
+        paso._empezar()
+
+        for _ in range(200):
+            wizard._vaciar_cola()
+            if "flash" in orden:
+                break
+            time.sleep(0.01)
+
+        # El backup ocurre antes que el flasheo.
+        assert orden == ["backup", "flash"]
+
+    def test_sin_backup_va_directo_al_flasheo(self, wizard, tmp_path, monkeypatch):
+        orden = []
+        monkeypatch.setattr(
+            wizard.pasos[3], "_flashear_por_brom", lambda: orden.append("flash")
+        )
+        DIALOGOS.respuesta_si_no = True
+        paso = self._preparar(wizard, tmp_path, MODO_BROM)
+        paso.variable_backup.set(False)
+        paso._empezar()
+        assert orden == ["flash"]
+
+    def test_si_el_backup_falla_pregunta_antes_de_seguir(self, wizard, tmp_path, monkeypatch):
+        from core import herramientas
+
+        orden = []
+        monkeypatch.setattr(
+            herramientas, "particiones_a_respaldar", lambda: []  # nada que respaldar
+        )
+        monkeypatch.setattr(
+            wizard.pasos[3], "_flashear_por_brom", lambda: orden.append("flash")
+        )
+        # El usuario dice «no, no sigas sin copia».
+        DIALOGOS.respuesta_si_no = False
+
+        paso = self._preparar(wizard, tmp_path, MODO_BROM)
+        paso.variable_backup.set(True)
+        paso.operacion_en_curso = True
+        paso._preguntar_seguir_sin_copia()
+
+        assert orden == []  # no se flasheó
+        assert wizard.estado.flash_cancelado is True
+
     def test_el_resumen_avisa_de_las_particiones_saltadas(self, wizard, tmp_path):
         carpeta = rom_de_prueba(tmp_path, "lancelot")
         (carpeta / "images" / "nvram.img").write_bytes(b"\x00" * 512)

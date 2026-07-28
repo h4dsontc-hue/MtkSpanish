@@ -81,7 +81,14 @@ class PasoResultado(PasoBase):
             self._pintar(base.ICONO_AVISO, "Cancelado a mitad", CANCELADO, base.AMBAR)
             self.wizard.decir("Repite el proceso desde el paso 1.", base.AMBAR)
         elif self.estado.flash_correcto:
-            self._pintar(base.ICONO_OK, "¡Listo!", EXITO, base.VERDE)
+            texto = EXITO
+            if self.estado.ruta_backup:
+                texto += (
+                    "\n\nGuardaste una copia del IMEI antes de flashear en:\n"
+                    f"  {self.estado.ruta_backup}\n"
+                    "Consérvala: es lo que te devuelve el IMEI si algún día hace falta."
+                )
+            self._pintar(base.ICONO_OK, "¡Listo!", texto, base.VERDE)
             self.wizard.decir("Rescate completado.", base.VERDE)
         else:
             mensaje = self.estado.mensaje_error or (

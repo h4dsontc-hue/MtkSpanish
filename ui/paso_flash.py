@@ -57,6 +57,18 @@ class PasoFlash(PasoBase):
         )
         self.etiqueta_resumen.pack(fill="x", padx=16, pady=14)
 
+        # Marcado por defecto: perder el IMEI es el peor final posible, y una
+        # copia previa es lo único que lo devuelve. Solo tiene sentido por BROM,
+        # que es donde se pueden leer las particiones.
+        self.variable_backup = ctk.BooleanVar(value=True)
+        self.check_backup = ctk.CTkCheckBox(
+            cuerpo,
+            text="Hacer copia de seguridad del IMEI/NVRAM antes de flashear (recomendado)",
+            variable=self.variable_backup,
+            font=base.fuente_normal(),
+        )
+        self.check_backup.pack(fill="x", padx=4, pady=(0, 4))
+
         controles = ctk.CTkFrame(cuerpo, fg_color="transparent")
         controles.pack(fill="x", pady=12)
 
@@ -103,6 +115,19 @@ class PasoFlash(PasoBase):
         self.boton_empezar.configure(state="normal", text="Empezar a reinstalar")
         self.boton_cancelar.configure(state="disabled")
         self.etiqueta_resumen.configure(text=self._texto_resumen())
+
+        # El backup solo se puede leer por BROM/preloader (fastboot no lee).
+        if self.estado.modo in (MODO_BROM, MODO_PRELOADER):
+            self.check_backup.configure(
+                state="normal",
+                text="Hacer copia de seguridad del IMEI/NVRAM antes de flashear (recomendado)",
+            )
+        else:
+            self.variable_backup.set(False)
+            self.check_backup.configure(
+                state="disabled",
+                text="Copia del IMEI no disponible en este modo (solo por BROM)",
+            )
         # Hasta que no termine el flasheo no hay nada que ver en el paso 4.
         self.permitir_avance(False)
 
@@ -174,6 +199,15 @@ class PasoFlash(PasoBase):
         self.barra.set(0)
 
         modo = self.estado.modo
+        # Si toca copia de seguridad, se hace antes de escribir nada; cuando
+        # termina, sigue el flasheo. Si no, se flashea directamente.
+        if modo in (MODO_BROM, MODO_PRELOADER) and self.variable_backup.get():
+            self._respaldar_y_continuar()
+        else:
+            self._flashear_segun_modo()
+
+    def _flashear_segun_modo(self) -> None:
+        modo = self.estado.modo
         if modo in (MODO_BROM, MODO_PRELOADER):
             self._flashear_por_brom()
         elif modo == MODO_FASTBOOT:
@@ -183,6 +217,70 @@ class PasoFlash(PasoBase):
         else:
             self._escribir("No se sabe cómo flashear en este modo.", error=True)
             self._al_terminar(1)
+
+    # ───────────────────────── copia previa ─────────────────────────
+
+    def _respaldar_y_continuar(self) -> None:
+        from core import herramientas
+
+        self._fase("Copia de seguridad del IMEI antes de flashear...")
+        destino = herramientas.carpeta_backup_por_defecto(self.estado.codename)
+
+        def buscar():
+            return herramientas.particiones_a_respaldar()
+
+        def continuar(particiones):
+            if self.estado.flash_cancelado:
+                self._escribir("Cancelado antes de la copia.")
+                self._al_terminar(-1)
+                return
+            if isinstance(particiones, Exception) or not particiones:
+                motivo = (
+                    str(particiones)
+                    if isinstance(particiones, Exception)
+                    else "el móvil no ha devuelto ninguna partición crítica"
+                )
+                self._escribir(f"No se pudo preparar la copia: {motivo}", error=True)
+                self._preguntar_seguir_sin_copia()
+                return
+            self._escribir(f"Copiando {', '.join(particiones)} a {destino}")
+            self.seguimiento = herramientas.respaldar(
+                destino,
+                particiones,
+                al_recibir_linea=lambda l: self.en_ui(self._escribir, l),
+                al_progresar=lambda p: self.en_ui(self._progreso, p),
+                al_terminar=lambda c: self.en_ui(self._tras_copia, c, destino),
+            )
+
+        self.en_segundo_plano(buscar, continuar)
+
+    def _tras_copia(self, codigo: int, destino) -> None:
+        if self.estado.flash_cancelado:
+            self._al_terminar(-1)
+            return
+        if codigo == 0:
+            self._escribir(f"Copia de seguridad guardada en {destino}")
+            self.estado.ruta_backup = str(destino)
+            self.barra.set(0)
+            self._flashear_segun_modo()
+        else:
+            self._escribir("La copia de seguridad falló.", error=True)
+            self._preguntar_seguir_sin_copia()
+
+    def _preguntar_seguir_sin_copia(self) -> None:
+        seguir = messagebox.askyesno(
+            "La copia no se pudo hacer",
+            "No se ha podido guardar la copia del IMEI.\n\n"
+            "Si continúas y algo sale mal, no habrá forma de recuperar el IMEI.\n\n"
+            "¿Continuar de todos modos con la reinstalación?",
+            icon="warning",
+        )
+        if seguir:
+            self.barra.set(0)
+            self._flashear_segun_modo()
+        else:
+            self.estado.flash_cancelado = True
+            self._al_terminar(-1)
 
     # ───────────────────────────── estrategias ─────────────────────────────
 

@@ -29,12 +29,14 @@ class Estado:
     flash_cancelado: bool = False
     registro_flash: list[str] = field(default_factory=list)
     mensaje_error: str = ""
+    ruta_backup: str = ""
 
     def reiniciar_flasheo(self) -> None:
         self.flash_correcto = False
         self.flash_cancelado = False
         self.registro_flash = []
         self.mensaje_error = ""
+        self.ruta_backup = ""
 
     @property
     def codename(self) -> str:

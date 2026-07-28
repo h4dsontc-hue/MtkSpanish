@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Las versiones que soporta la app (main.py exige 3.10+).
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Instalar dependencias
+        # No hace falta customtkinter ni tkinter: los tests de la interfaz
+        # sustituyen customtkinter por dobles (tests/dobles_ui.py), así que
+        # corren sin pantalla. Solo se necesitan las libs de red y pytest.
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest requests beautifulsoup4
+
+      - name: Ejecutar los tests
+        run: python -m pytest tests/ -q
