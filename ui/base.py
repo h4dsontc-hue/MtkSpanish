@@ -12,6 +12,20 @@ AZUL = ("#0969da", "#4493f8")
 GRIS = ("#57606a", "#8b949e")
 FONDO_TARJETA = ("#f6f8fa", "#161b22")
 
+
+def color_texto_normal():
+    """El color de texto por defecto del tema activo.
+
+    CustomTkinter no admite `text_color=None` para decir «vuelve al color de
+    siempre»: lanza ValueError. Cuando hay que quitar un color de aviso que se
+    puso antes, hay que darle el de por defecto explícitamente.
+    """
+    try:
+        return ctk.ThemeManager.theme["CTkLabel"]["text_color"]
+    except (AttributeError, KeyError, TypeError):
+        return ("gray10", "#DCE4EE")
+
+
 ICONO_OK = "✔"
 ICONO_MAL = "✘"
 ICONO_AVISO = "⚠"

@@ -173,7 +173,11 @@ class Wizard(ctk.CTk):
             except Exception:
                 # Un fallo pintando algo no debe tumbar la ventana entera.
                 traceback.print_exc()
-        self.after(50, self._vaciar_cola)
+        try:
+            self.after(50, self._vaciar_cola)
+        except Exception:
+            # La ventana ya se ha destruido: no hay a quién volver a llamar.
+            return
 
     def en_segundo_plano(self, trabajo: Callable, al_acabar: Callable | None = None) -> None:
         """Lanza `trabajo()` en un hilo y llama a `al_acabar(resultado)` en la UI.

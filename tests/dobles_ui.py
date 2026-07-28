@@ -13,8 +13,26 @@ import sys
 import types
 
 
+# Opciones que CustomTkinter valida de verdad: pasarles None revienta con
+# «color is None, for transparency set color='transparent'». Los dobles tienen
+# que ser igual de estrictos o los tests dan por bueno lo que la app no acepta.
+_OPCIONES_DE_COLOR = frozenset(
+    {"text_color", "fg_color", "bg_color", "border_color", "hover_color",
+     "progress_color", "button_color", "checkmark_color", "label_fg_color"}
+)
+
+
+def _validar_colores(opciones: dict) -> None:
+    for nombre in _OPCIONES_DE_COLOR & opciones.keys():
+        if opciones[nombre] is None:
+            raise ValueError(
+                f"color is None, for transparency set {nombre}='transparent'"
+            )
+
+
 class WidgetFalso:
     def __init__(self, master=None, **kwargs):
+        _validar_colores(kwargs)
         self.master = master
         self.opciones = dict(kwargs)
         self.hijos: list[WidgetFalso] = []
@@ -38,6 +56,7 @@ class WidgetFalso:
 
     # --- opciones ---
     def configure(self, **kwargs):
+        _validar_colores(kwargs)
         self.opciones.update(kwargs)
 
     def cget(self, clave):
@@ -195,6 +214,16 @@ def instalar() -> DialogosFalsos:
     ctk.BooleanVar = type("BooleanVar", (VariableFalsa,), {})
     ctk.set_appearance_mode = lambda modo: None
     ctk.set_default_color_theme = lambda tema: None
+
+    # Con los mismos valores que el tema azul de CustomTkinter, para que
+    # `base.color_texto_normal()` recorra el camino de verdad y no el de
+    # reserva.
+    gestor = type("ThemeManager", (), {})
+    gestor.theme = {
+        "CTkLabel": {"text_color": ["gray10", "#DCE4EE"], "fg_color": "transparent"},
+        "CTkButton": {"text_color": ["#DCE4EE", "#DCE4EE"]},
+    }
+    ctk.ThemeManager = gestor
 
     tk = types.ModuleType("tkinter")
     tk.Variable = VariableFalsa

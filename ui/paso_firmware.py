@@ -126,7 +126,7 @@ class PasoFirmware(PasoBase):
 
         self.etiqueta_analisis.configure(
             text="\n".join(partes),
-            text_color=base.ROJO if not compatible else None,
+            text_color=base.ROJO if not compatible else base.color_texto_normal(),
         )
 
         if not compatible:
