@@ -433,6 +433,30 @@ class TestPasoFlash:
         assert wizard.estado.registro_flash == []
 
 
+class TestHerramientas:
+    def test_el_boton_aparece_solo_con_movil(self, wizard):
+        paso = wizard.pasos[1]
+        paso._al_detectar(None)
+        assert not paso.boton_herramientas.empaquetado
+        paso._al_detectar(Dispositivo(modo=MODO_BROM, modelo="Redmi 9"))
+        assert paso.boton_herramientas.empaquetado
+
+    def test_la_ventana_se_construye(self, wizard):
+        from ui.herramientas import VentanaHerramientas
+
+        wizard.estado.dispositivo = Dispositivo(modo=MODO_BROM, modelo="Redmi 9")
+        ventana = VentanaHerramientas(wizard)
+        # Sin reventar, con su registro listo.
+        assert ventana.registro is not None
+
+    def test_la_ventana_aguanta_sin_dispositivo(self, wizard):
+        from ui.herramientas import VentanaHerramientas
+
+        wizard.estado.dispositivo = None
+        ventana = VentanaHerramientas(wizard)
+        assert ventana is not None
+
+
 class TestPasoResultado:
     def test_exito(self, wizard):
         wizard.estado.flash_correcto = True

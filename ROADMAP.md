@@ -27,9 +27,10 @@
 - [~] Lector de información del dispositivo — modelo, codename, chipset,
       Android y número de serie ya se leen por ADB/fastboot. **Falta el IMEI**
       y el firmware actual cuando el móvil está en BROM.
-- [ ] Backup automático de particiones críticas antes de flashear
-      *(lo más valioso que queda: `mtk rl` de nvram/nvdata/persist/proinfo
-      antes de escribir nada, para poder devolver el IMEI si algo sale mal)*
+- [x] Backup y restauración de particiones críticas (nvram, nvdata, nvcfg,
+      persist, proinfo, protect1/2) — en «Herramientas avanzadas». Devuelve el
+      IMEI si algo sale mal. Solo por BROM (fastboot no sabe leer). **Falta**
+      ofrecerlo automáticamente antes de cada flasheo.
 - [~] Validación del firmware antes de flashear — ya se comprueba el tipo de
       ROM, que estén las particiones esenciales, que el codename coincida con
       el móvil y que no haya imágenes partidas. **Falta** parsear el scatter
@@ -42,8 +43,12 @@
 ## v1.2 — Control avanzado
 
 - [ ] Flashear partición individual (boot, recovery, vbmeta, etc.)
-- [ ] Desbloqueo de bootloader guiado paso a paso
+- [x] Desbloqueo de bootloader guiado paso a paso *(guía del método oficial de
+      Xiaomi en «Herramientas avanzadas»; el desbloqueo real lo hace Mi Unlock,
+      no se puede saltar la espera)*
 - [ ] Rebloqueo de bootloader
+- [x] Borrar bloqueo de pantalla olvidado (patrón/PIN) — reset de fábrica desde
+      «Herramientas avanzadas», por BROM o fastboot. **No** es bypass de cuenta.
 - [ ] Modo básico / modo avanzado (el novato ve 3 botones, el avanzado ve todo)
 - [x] Log exportable a fichero .txt para pedir ayuda en foros *(adelantado a
       v1.0: el paso 5 lo guarda con cabecera de móvil, modo y firmware)*
@@ -61,10 +66,23 @@
 
 ## v1.4 — Herramientas extra
 
-- [ ] Desbloqueo de FRP (Google Account) para chips MediaTek
-- [ ] Lector y escritura de IMEI (con aviso legal)
+- [x] Restaurar el IMEI desde una copia propia *(hecho en v1.1: respaldar y
+      restaurar nvram/nvdata. Restaurar TU copia es legítimo; escribir un IMEI
+      arbitrario es delito en muchos países y por eso no se hace)*
+- [x] Guía legítima para cuentas Google (FRP) y Mi bloqueadas *(en
+      «Herramientas avanzadas»: cómo recuperarlas oficialmente. Ver abajo el
+      porqué de NO automatizar el bypass)*
 - [ ] Notificación cuando sale firmware nuevo para tu dispositivo
 - [ ] Sistema de plugins para añadir soporte a otras marcas MTK (Realme, OPPO, etc.)
+
+> **Por qué el bypass de FRP y de cuenta Mi no está ni estará.** Son candados
+> antirrobo, no averías: existen para que un móvil robado no sirva sin las
+> credenciales del dueño. Una herramienta con interfaz que lo hace en cualquier
+> móvil no puede comprobar de quién es cada uno, así que en la práctica sería la
+> herramienta que blanquea móviles robados — y distribuir eso tiene consecuencias
+> legales en muchos países. Para un dueño legítimo que olvidó su cuenta, el
+> camino es re-loguearse o la retirada oficial del fabricante con la factura, y
+> eso sí está documentado dentro de la app.
 
 ---
 

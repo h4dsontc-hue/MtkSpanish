@@ -51,6 +51,21 @@ class WidgetFalso:
     def grid(self, **kwargs):
         self.empaquetado = True
 
+    def grid_forget(self):
+        self.empaquetado = False
+
+    def columnconfigure(self, *args, **kwargs):
+        pass
+
+    def rowconfigure(self, *args, **kwargs):
+        pass
+
+    def focus(self):
+        pass
+
+    def focus_set(self):
+        pass
+
     def place(self, **kwargs):
         self.empaquetado = True
 

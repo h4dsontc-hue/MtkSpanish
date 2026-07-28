@@ -71,6 +71,16 @@ class PasoDetectar(PasoBase):
             command=self._cambiar_auto,
         ).pack(side="left", padx=14)
 
+        # Aparece solo cuando hay un móvil detectado: sin dispositivo no hay
+        # nada que las herramientas puedan hacer.
+        self.boton_herramientas = ctk.CTkButton(
+            botones,
+            text="Herramientas avanzadas",
+            width=190,
+            fg_color=base.GRIS,
+            command=self._abrir_herramientas,
+        )
+
         self.tarjeta = Tarjeta(cuerpo)
         self.tarjeta.pack(fill="both", expand=True)
 
@@ -192,6 +202,7 @@ class PasoDetectar(PasoBase):
             self.etiqueta_detalle.configure(text=detector.diagnostico_sin_dispositivo())
             self.etiqueta_protecciones.configure(text="")
             self.boton_protecciones.pack_forget()
+            self.boton_herramientas.pack_forget()
             self.permitir_avance(False)
             self.wizard.decir("Esperando a que conectes el móvil...", base.GRIS)
             return
@@ -211,9 +222,22 @@ class PasoDetectar(PasoBase):
         else:
             self.boton_protecciones.pack_forget()
 
+        self.boton_herramientas.pack(side="left", padx=6)
+
         self.permitir_avance(dispositivo.se_puede_flashear or dispositivo.modo == MODO_ADB)
         self.wizard.decir(dispositivo.descripcion_modo, base.VERDE)
         self._parar_auto()
+
+    def _abrir_herramientas(self) -> None:
+        from ui.herramientas import VentanaHerramientas
+
+        # El sondeo automático movería al móvil bajo los pies de la herramienta.
+        self._parar_auto()
+        ventana = VentanaHerramientas(self.wizard)
+        try:
+            ventana.focus()
+        except Exception:
+            pass
 
     def _leer_protecciones(self) -> None:
         self.boton_protecciones.configure(state="disabled", text="Consultando el móvil...")

@@ -292,6 +292,53 @@ def escribir_particiones(
     return seguimiento
 
 
+def leer_particiones(
+    particiones: list[str],
+    carpeta: str | Path,
+    al_recibir_linea: Callable[[str], None],
+    al_progresar: Callable[[float], None] | None = None,
+    al_terminar: Callable[[int], None] | None = None,
+) -> SeguimientoFlash:
+    """Vuelca particiones del móvil a disco (`mtk r`). Se usa para el backup.
+
+    Cada partición se guarda como `<carpeta>/<nombre>.bin`, que es el mismo
+    nombre que espera luego `escribir_particiones` para restaurarlas.
+    """
+    carpeta = Path(carpeta)
+    carpeta.mkdir(parents=True, exist_ok=True)
+    nombres = ",".join(particiones)
+    ficheros = ",".join(str(carpeta / f"{p}.bin") for p in particiones)
+    seguimiento = SeguimientoFlash()
+    seguimiento.proceso = binarios.ejecutar_en_vivo(
+        _comando("r", nombres, ficheros),
+        _envolver_callbacks(seguimiento, al_recibir_linea, al_progresar),
+        al_terminar,
+        cwd=_cwd_mtk(),
+    )
+    return seguimiento
+
+
+def borrar_particiones(
+    particiones: list[str],
+    al_recibir_linea: Callable[[str], None],
+    al_terminar: Callable[[int], None] | None = None,
+) -> SeguimientoFlash:
+    """Borra particiones enteras (`mtk e`). Se usa para quitar el bloqueo.
+
+    Borrar `userdata` (y `metadata` en móviles con cifrado por archivo) es lo
+    que quita un patrón o PIN olvidado: equivale a un reset de fábrica.
+    """
+    nombres = ",".join(particiones)
+    seguimiento = SeguimientoFlash()
+    seguimiento.proceso = binarios.ejecutar_en_vivo(
+        _comando("e", nombres),
+        _envolver_callbacks(seguimiento, al_recibir_linea, None),
+        al_terminar,
+        cwd=_cwd_mtk(),
+    )
+    return seguimiento
+
+
 def reiniciar(al_recibir_linea: Callable[[str], None] | None = None) -> binarios.Resultado:
     resultado = binarios.ejecutar(_comando("reset"), timeout=60)
     if al_recibir_linea:
