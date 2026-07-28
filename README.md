@@ -24,13 +24,19 @@ Todas las herramientas de flasheo para MediaTek están en inglés y asumen conoc
 
 ## Características
 
-- ✅ Detección automática del modo del dispositivo (ADB / Fastboot / BROM)
+- ✅ Detección automática del modo del dispositivo (ADB / Fastboot / Preloader / BROM)
 - ✅ Wizard paso a paso con interfaz gráfica
 - ✅ Bypass de SBC/DAA en chipsets vulnerables (vía los exploits de MTKClient) + diagnóstico en español
 - ✅ Búsqueda de firmware en mifirm.net (la descarga se abre en tu navegador)
-- ✅ Barra de progreso en tiempo real
+- ✅ **Copia automática del IMEI/NVRAM antes de flashear** (por si algo sale mal)
+- ✅ **Verificación de integridad del firmware** (checksums md5/sha) antes de escribir
+- ✅ Analiza el firmware: parsea el scatter, une imágenes partidas y avisa de las sparse
+- ✅ **Herramientas avanzadas**: copia/restaura IMEI, borra bloqueo de pantalla olvidado, historial de rescates
+- ✅ Sistema de actualizaciones (de la app y de MTKClient)
+- ✅ Barra de progreso en tiempo real, con cancelación
 - ✅ Mensajes de error explicados en español humano
 - ✅ Preparación automática del sistema Linux (ModemManager, udev, etc.)
+- ✅ Instalador de un comando y lanzador en el menú de aplicaciones
 - ✅ Compatible con Linux (Pop!_OS, Ubuntu, Mint, Arch...)
 
 > **Sobre el Secure Boot y las descargas, para que no haya sorpresas:**
@@ -53,31 +59,56 @@ Todas las herramientas de flasheo para MediaTek están en inglés y asumen conoc
 
 - Python 3.10+
 - Linux (Ubuntu 22.04+ recomendado)
-- [MTKClient](https://github.com/bkerler/mtkclient) instalado
-- `adb` y `fastboot` instalados (`sudo apt install adb fastboot`)
-- Cable USB de calidad
+- [MTKClient](https://github.com/bkerler/mtkclient) — el instalador lo clona por ti
+- `python3-tk`, `adb` y `fastboot` — el instalador los instala
+- Cable USB **de datos** (los de solo carga no sirven)
 
 ---
 
 ## Instalación
 
+### La forma fácil (recomendada)
+
 ```bash
+git clone https://github.com/h4dsontc-hue/MtkSpanish
+cd MtkSpanish
+sh instalar.sh
+```
+
+`instalar.sh` instala las dependencias del sistema (detecta apt / dnf / pacman /
+zypper), clona MTKClient, instala las librerías de Python y crea el comando
+`rescatemtk` más el lanzador del menú de aplicaciones. Con
+`sh instalar.sh --dry-run` puedes ver lo que hará sin tocar nada.
+
+Después, abre **RescateMTK** desde el menú o ejecuta `rescatemtk` en una terminal.
+
+### A mano
+
+```bash
+# 1. Dependencias del sistema (Debian / Ubuntu / Pop!_OS)
+sudo apt install python3-tk android-tools-adb android-tools-fastboot git
+
+# 2. MTKClient (el motor de rescate)
+git clone https://github.com/bkerler/mtkclient ~/mtkclient
+pip install -r ~/mtkclient/requirements.txt
+
+# 3. RescateMTK
 git clone https://github.com/h4dsontc-hue/MtkSpanish
 cd MtkSpanish
 pip install -r requirements.txt
 python3 main.py
 ```
 
-No hace falta `sudo`: el primer paso del wizard pide la contraseña de
-administrador una sola vez, con el diálogo gráfico del sistema, solo para
-instalar las reglas udev y desactivar ModemManager.
+No hace falta `sudo` para lanzar la app: el primer paso del wizard pide la
+contraseña de administrador una sola vez, con el diálogo gráfico del sistema,
+solo para instalar las reglas udev y desactivar ModemManager.
 
 ---
 
 ## Uso
 
 1. Conecta el teléfono al PC (apagado si está en BROM)
-2. Ejecuta `python3 main.py`
+2. Abre **RescateMTK** desde el menú (o ejecuta `rescatemtk` / `python3 main.py`)
 3. El wizard te guía paso a paso
 
 ---
@@ -97,7 +128,7 @@ Cualquier dispositivo con chip **MediaTek** que soporte MTKClient:
 Este proyecto no existiría sin el trabajo de:
 
 - **[@bkerler](https://github.com/bkerler)** — autor de [MTKClient](https://github.com/bkerler/mtkclient), el motor que hace posible la comunicación con dispositivos MediaTek en modo BROM. Todo el crédito por el bypass de Secure Boot y la comunicación de bajo nivel es suyo.
-- **[mifirm.net](https://mifirm.net)** — base de datos de firmwares Xiaomi usada para las descargas automáticas.
+- **[mifirm.net](https://mifirm.net)** — base de datos de firmwares Xiaomi usada por el buscador de firmware.
 
 ---
 
