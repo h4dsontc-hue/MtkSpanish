@@ -93,10 +93,15 @@
 
 ## v2.0 — Multiplataforma
 
-- [ ] Soporte Windows (nativo, sin WSL)
+- [x] Instalador de un comando (`instalar.sh`) — instala dependencias del
+      sistema (detecta apt/dnf/pacman/zypper), clona MTKClient, instala las
+      libs de Python y crea el comando `rescatemtk` + lanzador en el menú. Con
+      `--dry-run`. Desinstalador aparte. Es el 80% del valor de un AppImage sin
+      su complejidad; verificado con gestor simulado y HOME temporal.
 - [ ] AppImage universal para cualquier distro Linux sin instalar nada
 - [ ] Instalador .deb para Ubuntu/Debian/Pop!_OS
 - [ ] Instalador .rpm para Fedora/openSUSE
+- [ ] Soporte Windows (nativo, sin WSL)
 
 ---
 
