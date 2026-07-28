@@ -16,7 +16,7 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from core import errores, herramientas
+from core import errores, herramientas, mtk
 from core.detector import MODO_ADB
 from ui import base
 from ui.base import Registro
@@ -96,6 +96,14 @@ class VentanaHerramientas(ctk.CTkToplevel):
                 "Cuentas bloqueadas", herramientas.GUIA_CUENTAS
             ),
         )
+        self._boton(
+            rejilla, 3, 0, "Preparar sesión BROM (Secure Boot)",
+            "Lanza el exploit del bootrom para poder flashear un móvil con "
+            "SBC/DAA activados.",
+            self._preparar_brom,
+            habilitado=modo in herramientas.MODOS_BROM,
+            motivo="Solo en modo BROM/preloader.",
+        )
 
         self.etiqueta_fase = ctk.CTkLabel(
             self, text="", font=base.fuente_normal(), text_color=base.GRIS, anchor="w"
@@ -148,6 +156,21 @@ class VentanaHerramientas(ctk.CTkToplevel):
 
     def _fase(self, texto):
         self.etiqueta_fase.configure(text=texto)
+
+    def _preparar_brom(self):
+        if self._ocupada():
+            return
+        self._fase("Enviando el exploit al bootrom...")
+        self._log(
+            "Lanzando el payload de MTKClient (kamakiri/carbonara). En chipsets "
+            "vulnerables esto salta SBC/DAA y abre la sesión para flashear."
+        )
+        self.operacion = mtk.lanzar_payload(
+            al_recibir_linea=lambda l: self.wizard.en_ui(self._log, l),
+            al_terminar=lambda c: self.wizard.en_ui(
+                self._fin_generico, c, "Sesión BROM"
+            ),
+        )
 
     def _info(self):
         from core import detector

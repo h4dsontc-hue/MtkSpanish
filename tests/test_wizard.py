@@ -456,6 +456,22 @@ class TestHerramientas:
         ventana = VentanaHerramientas(wizard)
         assert ventana is not None
 
+    def test_el_boton_de_secure_boot_lanza_el_payload(self, wizard, monkeypatch):
+        from core import mtk
+        from ui.herramientas import VentanaHerramientas
+
+        wizard.estado.dispositivo = Dispositivo(modo=MODO_BROM, modelo="Redmi 9")
+        ventana = VentanaHerramientas(wizard)
+
+        llamado = {}
+        monkeypatch.setattr(
+            mtk,
+            "lanzar_payload",
+            lambda **k: llamado.setdefault("si", True) or "seg",
+        )
+        ventana._preparar_brom()
+        assert llamado.get("si") is True
+
 
 class TestPasoResultado:
     def test_exito(self, wizard):
