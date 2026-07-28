@@ -1,0 +1,11 @@
+# Dependencias de RescateMTK.
+#
+# tkinter NO se instala con pip: viene con el paquete del sistema
+# (python3-tk en Debian/Ubuntu, python3-tkinter en Fedora, tk en Arch).
+#
+# MTKClient tampoco se instala aquí: se clona aparte y esta herramienta lo
+# localiza sola. Ver el README.
+
+customtkinter>=5.2.0
+requests>=2.28.0
+beautifulsoup4>=4.11.0

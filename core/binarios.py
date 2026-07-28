@@ -9,6 +9,7 @@ con `ok = False` y un mensaje en español.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -191,13 +192,13 @@ def ejecutar_en_vivo(
 
     def trabajar() -> None:
         try:
+            # En binario, no en modo texto: hace falta leer con read1() para
+            # ver la barra de progreso según sale, y eso solo lo ofrece el
+            # buffer de bytes. La decodificación se hace aquí abajo.
             handle.proceso = subprocess.Popen(
                 [programa, *cmd[1:]],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                errors="replace",
                 cwd=cwd,
                 env=entorno,
                 start_new_session=True,  # para poder matar todo el grupo
@@ -225,23 +226,31 @@ def ejecutar_en_vivo(
 
 
 def _lineas(flujo) -> Iterable[str]:
-    """Parte la salida en líneas tratando \\r como salto.
+    """Parte la salida en líneas tratando \\r como salto, además de \\n.
 
     MTKClient dibuja la barra de progreso reescribiendo la misma línea con \\r;
     si solo separásemos por \\n el progreso llegaría de golpe al final.
+
+    Se lee con `read1`, que devuelve lo que haya disponible sin esperar a
+    llenar el buffer. Con un `read(n)` normal la barra avanzaría a saltos de n
+    bytes, y con `read(1)` habría una vuelta de bucle por carácter.
     """
-    resto = ""
+    resto = b""
+    separadores = re.compile(rb"[\r\n]")
     while True:
-        trozo = flujo.read(1)
+        try:
+            trozo = flujo.read1(8192)
+        except (ValueError, OSError):  # el flujo se cerró al cancelar
+            break
         if not trozo:
             break
-        if trozo in ("\n", "\r"):
-            yield resto.strip()
-            resto = ""
-        else:
-            resto += trozo
+        resto += trozo
+        partes = separadores.split(resto)
+        resto = partes.pop()  # lo que va después del último salto: incompleto
+        for parte in partes:
+            yield parte.decode("utf-8", errors="replace").strip()
     if resto.strip():
-        yield resto.strip()
+        yield resto.decode("utf-8", errors="replace").strip()
 
 
 def diagnostico() -> dict[str, str | None]:

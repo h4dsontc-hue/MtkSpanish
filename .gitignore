@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Firmwares y volcados: pesan gigas, nunca al repositorio.
+*.img
+*.tgz
+*.zip
+firmware/
+descargas/
+
+# Registros de rescates
+rescatemtk-*.txt

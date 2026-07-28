@@ -170,6 +170,12 @@ def listar_particiones(timeout: int = 120) -> list[str]:
 # ─────────────────────────── operaciones largas ───────────────────────────
 
 
+# Así dibuja MTKClient la barra: "Done |███-----| 45.5% boot (0x1/0x4),2 MB/s".
+# Los caracteres de bloque y las barras verticales son lo que la distingue de
+# un mensaje de verdad que casualmente lleve un porcentaje.
+_ES_BARRA_DE_PROGRESO = re.compile(r"[█▓▒░]|\|\s*-+\s*\||^Done\s*\|")
+
+
 @dataclass
 class SeguimientoFlash:
     """Estado que la UI va leyendo mientras el flasheo avanza."""
@@ -199,9 +205,10 @@ def _envolver_callbacks(
             seguimiento.porcentaje = porcentaje
             if al_progresar:
                 al_progresar(porcentaje)
-            # Las líneas que son solo barra de progreso no se escriben en el
-            # registro: llenarían la ventana con cientos de líneas iguales.
-            if not re.search(r"[A-Za-z]{4,}", linea_cruda.replace("Done", "")):
+            # La barra de progreso se redibuja cientos de veces por partición.
+            # Mueve la barra, pero no se escribe en el registro: si no, el
+            # usuario no vería más que una catarata de líneas iguales.
+            if _ES_BARRA_DE_PROGRESO.search(linea_cruda):
                 return
 
         particion = re.search(r"(?:Writing|Wrote|Reading)\s+(?:partition\s+)?([\w.\-]+)", linea_cruda, re.I)
