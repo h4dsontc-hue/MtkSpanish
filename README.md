@@ -11,7 +11,7 @@ MtkSpanish es un wizard paso a paso diseñado para usuarios hispanohablantes que
 - Rescatar un teléfono atascado en **modo BROM** o **Preloader**
 - Flashear firmware completo desde cero
 - Gestionar dispositivos en modo **ADB** o **Fastboot**
-- Descargar el firmware correcto automáticamente desde **mifirm.net**
+- Buscar el firmware correcto en **mifirm.net** por nombre en clave
 - Todo con mensajes en **español claro**, sin tecnicismos
 
 ---
@@ -26,12 +26,21 @@ Todas las herramientas de flasheo para MediaTek están en inglés y asumen conoc
 
 - ✅ Detección automática del modo del dispositivo (ADB / Fastboot / BROM)
 - ✅ Wizard paso a paso con interfaz gráfica
-- ✅ Bypass automático de SBC/SLA/DAA (Secure Boot MediaTek)
-- ✅ Búsqueda y descarga de firmware desde mifirm.net
+- ✅ Diagnóstico de SBC/SLA/DAA (Secure Boot MediaTek) explicado en español
+- ✅ Búsqueda de firmware en mifirm.net (la descarga se abre en tu navegador)
 - ✅ Barra de progreso en tiempo real
 - ✅ Mensajes de error explicados en español humano
 - ✅ Preparación automática del sistema Linux (ModemManager, udev, etc.)
 - ✅ Compatible con Linux (Pop!_OS, Ubuntu, Mint, Arch...)
+
+> **Sobre el Secure Boot y las descargas, para que no haya sorpresas:**
+> la herramienta **detecta** si el móvil tiene SBC, DAA o SLA activados y te
+> explica qué significa, pero **no los salta**: un bootrom con SLA solo acepta
+> cargadores firmados por el fabricante, y sin ese fichero de autenticación no
+> hay rescate por BROM posible (la vía entonces es fastboot, si el bootloader
+> está desbloqueado). Y las descargas de mifirm.net se abren en tu navegador
+> porque esa web genera los enlaces con JavaScript ofuscado; descomprimes el
+> archivo y lo eliges en la pestaña «Ya lo tengo descargado».
 
 ---
 
@@ -51,15 +60,19 @@ Todas las herramientas de flasheo para MediaTek están en inglés y asumen conoc
 git clone https://github.com/h4dsontc-hue/MtkSpanish
 cd MtkSpanish
 pip install -r requirements.txt
-sudo python3 main.py
+python3 main.py
 ```
+
+No hace falta `sudo`: el primer paso del wizard pide la contraseña de
+administrador una sola vez, con el diálogo gráfico del sistema, solo para
+instalar las reglas udev y desactivar ModemManager.
 
 ---
 
 ## Uso
 
 1. Conecta el teléfono al PC (apagado si está en BROM)
-2. Ejecuta `sudo python3 main.py`
+2. Ejecuta `python3 main.py`
 3. El wizard te guía paso a paso
 
 ---
