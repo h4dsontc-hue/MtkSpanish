@@ -85,10 +85,36 @@ class PasoBienvenida(PasoBase):
             command=self._revisar,
         ).pack(side="left", padx=10)
 
+        self._construir_actualizaciones(cuerpo)
+
+    def _construir_actualizaciones(self, cuerpo) -> None:
+        tarjeta = Tarjeta(cuerpo)
+        tarjeta.pack(fill="x", pady=(12, 0))
+
+        fila = ctk.CTkFrame(tarjeta, fg_color="transparent")
+        fila.pack(fill="x", padx=16, pady=12)
+
+        ctk.CTkLabel(
+            fila, text="Actualizaciones", font=base.fuente_subtitulo(), anchor="w"
+        ).pack(side="left")
+
+        self.boton_actualizaciones = ctk.CTkButton(
+            fila, text="Buscar actualizaciones", width=180, command=self._buscar_actualizaciones
+        )
+        self.boton_actualizaciones.pack(side="right")
+
+        self.contenedor_actualizaciones = ctk.CTkFrame(tarjeta, fg_color="transparent")
+        self.contenedor_actualizaciones.pack(fill="x", padx=16, pady=(0, 12))
+        self.filas_actualizacion: list = []
+
     # ───────────────────────────── lógica ─────────────────────────────
 
     def al_entrar(self) -> None:
         self._revisar()
+        # Comprobación silenciosa en segundo plano: si no hay internet, no pasa
+        # nada; el usuario siempre puede pulsar el botón a mano.
+        if not self.filas_actualizacion:
+            self._buscar_actualizaciones(silencioso=True)
 
     def _revisar(self) -> None:
         revisiones = sistema.revisar_entorno()
@@ -179,3 +205,93 @@ class PasoBienvenida(PasoBase):
                 f"{resultado.mensaje}\n\n{resultado.detalle[:600]}",
             )
         self._revisar()
+
+    # ───────────────────────────── actualizaciones ─────────────────────────
+
+    def _buscar_actualizaciones(self, silencioso: bool = False) -> None:
+        from core import actualizaciones
+
+        if not silencioso:
+            self.boton_actualizaciones.configure(state="disabled", text="Buscando...")
+        self.en_segundo_plano(actualizaciones.comprobar_todo, self._pintar_actualizaciones)
+
+    def _pintar_actualizaciones(self, estados) -> None:
+        self.boton_actualizaciones.configure(
+            state="normal", text="Buscar actualizaciones"
+        )
+        for fila in self.filas_actualizacion:
+            fila.destroy()
+        self.filas_actualizacion = []
+
+        if isinstance(estados, Exception):
+            self._fila_actualizacion(
+                f"No se pudieron comprobar las actualizaciones: {estados}", None, False
+            )
+            return
+
+        for estado in estados:
+            self._fila_actualizacion(
+                estado.resumen(),
+                estado,
+                estado.hay_actualizacion and estado.se_puede_actualizar,
+            )
+
+    def _fila_actualizacion(self, texto, estado, ofrecer_boton) -> None:
+        import customtkinter as ctk
+
+        fila = ctk.CTkFrame(self.contenedor_actualizaciones, fg_color="transparent")
+        fila.pack(fill="x", pady=2)
+
+        if estado is not None and estado.error:
+            color = base.GRIS
+        elif estado is not None and estado.hay_actualizacion:
+            color = base.AMBAR
+        elif estado is not None:
+            color = base.VERDE
+        else:
+            color = base.ROJO
+
+        ctk.CTkLabel(
+            fila, text=texto, font=base.fuente_normal(), text_color=color,
+            anchor="w", justify="left", wraplength=620,
+        ).pack(side="left", fill="x", expand=True)
+
+        if ofrecer_boton:
+            ctk.CTkButton(
+                fila, text="Actualizar", width=110,
+                command=lambda e=estado: self._actualizar(e),
+            ).pack(side="right")
+
+        self.filas_actualizacion.append(fila)
+
+    def _actualizar(self, estado) -> None:
+        from core import actualizaciones
+
+        if estado.ruta is None:
+            return
+        self.wizard.decir(f"Actualizando {estado.nombre}...", base.AZUL)
+        actualizaciones.actualizar(
+            estado.ruta,
+            al_recibir_linea=lambda l: self.en_ui(self.wizard.decir, l, base.GRIS),
+            al_terminar=lambda c: self.en_ui(self._al_actualizar, estado, c),
+        )
+
+    def _al_actualizar(self, estado, codigo) -> None:
+        from tkinter import messagebox
+
+        if codigo == 0:
+            self.wizard.decir(f"{estado.nombre} actualizado.", base.VERDE)
+            messagebox.showinfo(
+                "Actualizado",
+                f"{estado.nombre} se ha actualizado.\n\n"
+                "Cierra y vuelve a abrir la aplicación para usar la versión nueva.",
+            )
+        else:
+            self.wizard.decir(f"No se pudo actualizar {estado.nombre}.", base.ROJO)
+            messagebox.showerror(
+                "No se pudo actualizar",
+                f"La actualización de {estado.nombre} falló.\n\n"
+                "Suele ser porque tienes cambios propios en esa carpeta. "
+                "Actualízala a mano con «git pull» o vuelve a clonarla.",
+            )
+        self._buscar_actualizaciones(silencioso=True)

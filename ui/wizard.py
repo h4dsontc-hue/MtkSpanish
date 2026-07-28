@@ -29,7 +29,9 @@ class Wizard(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("RescateMTK — rescate de móviles MediaTek")
+        from core.actualizaciones import VERSION
+
+        self.title(f"RescateMTK v{VERSION} — rescate de móviles MediaTek")
         self.geometry(f"{ANCHO}x{ALTO}")
         self.minsize(820, 620)
 

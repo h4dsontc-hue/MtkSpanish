@@ -183,6 +183,26 @@ class TestPasoBienvenida:
         wizard.pasos[0].al_entrar()
         assert wizard.boton_siguiente.cget("state") == "normal"
 
+    def test_pinta_el_resultado_de_actualizaciones(self, wizard):
+        from core import actualizaciones as act
+
+        paso = wizard.pasos[0]
+        estados = [
+            act.EstadoActualizacion(
+                componente="app", hay_actualizacion=True, se_puede_actualizar=True,
+                commits_por_detras=3, ruta=None,
+            ),
+            act.EstadoActualizacion(componente="mtkclient", error="al día."),
+        ]
+        paso._pintar_actualizaciones(estados)
+        # Una fila por componente.
+        assert len(paso.filas_actualizacion) == 2
+
+    def test_un_fallo_de_red_no_rompe_la_bienvenida(self, wizard):
+        paso = wizard.pasos[0]
+        paso._pintar_actualizaciones(RuntimeError("sin internet"))
+        assert len(paso.filas_actualizacion) == 1
+
 
 class TestPasoDetectar:
     def test_sin_dispositivo_no_deja_avanzar(self, wizard):
