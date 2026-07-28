@@ -30,11 +30,14 @@
 - [x] Backup y restauración de particiones críticas (nvram, nvdata, nvcfg,
       persist, proinfo, protect1/2) — en «Herramientas avanzadas». Devuelve el
       IMEI si algo sale mal. Solo por BROM (fastboot no sabe leer). **Falta**
-      ofrecerlo automáticamente antes de cada flasheo.
-- [~] Validación del firmware antes de flashear — ya se comprueba el tipo de
-      ROM, que estén las particiones esenciales, que el codename coincida con
-      el móvil y que no haya imágenes partidas. **Falta** parsear el scatter
-      de verdad y verificar checksums.
+      ofrecerlo automáticamente antes de cada flasheo. **Hecho:** el paso de
+      flasheo ofrece la copia (marcada por defecto) y respalda antes de escribir.
+- [~] Validación del firmware antes de flashear — se comprueba el tipo de ROM,
+      las particiones esenciales, que el codename coincida, **se parsea el
+      scatter de verdad** (partición→archivo según el fabricante, respetando
+      `is_download`), se **unen las imágenes partidas en crudo** y se **avisa de
+      las imágenes sparse** (que MTKClient escribe mal). **Falta** convertir las
+      sparse con simg2img y verificar checksums.
 - [ ] Historial de dispositivos flasheados con fecha y firmware usado
 - [ ] Detector de cable USB malo (uno de los problemas más comunes)
 

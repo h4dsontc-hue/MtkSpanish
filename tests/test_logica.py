@@ -246,15 +246,145 @@ class TestAnalisisDeFirmware:
         firmware = validar.analizar(carpeta)
         assert "preloader" in firmware.imagenes
 
-    def test_las_imagenes_partidas_se_avisan(self, tmp_path):
+    def test_las_imagenes_partidas_raw_se_unen(self, tmp_path):
         carpeta = tmp_path / "rom"
         carpeta.mkdir()
         (carpeta / "boot.img").write_bytes(b"\x00" * 512)
-        (carpeta / "super.img.0").write_bytes(b"\x00" * 512)
-        (carpeta / "super.img.1").write_bytes(b"\x00" * 512)
+        (carpeta / "super.img.0").write_bytes(b"AAAA")
+        (carpeta / "super.img.1").write_bytes(b"BBBB")
+        firmware = validar.analizar(carpeta)
+        assert "super" in firmware.imagenes
+        # Unida en orden: trozo 0 y luego trozo 1.
+        assert firmware.imagenes["super"].read_bytes() == b"AAAABBBB"
+        assert any("unido" in aviso for aviso in firmware.avisos)
+
+    def test_las_imagenes_partidas_sparse_no_se_unen(self, tmp_path):
+        carpeta = tmp_path / "rom"
+        carpeta.mkdir()
+        (carpeta / "boot.img").write_bytes(b"\x00" * 512)
+        # Cabecera sparse: concatenar esto en crudo daría basura.
+        (carpeta / "super.img.0").write_bytes(validar.MAGIA_SPARSE + b"resto")
+        (carpeta / "super.img.1").write_bytes(b"mas datos")
         firmware = validar.analizar(carpeta)
         assert "super" not in firmware.imagenes
-        assert any("partidos" in aviso for aviso in firmware.avisos)
+        assert any("sparse" in aviso for aviso in firmware.avisos)
+
+
+SCATTER_EJEMPLO = """\
+############################################################################
+# General Setting
+############################################################################
+- general: MTK_PLATFORM_CFG
+  info:
+    - config_version: V1.1.2
+      platform: MT6768
+
+- partition_index: SYS0
+  partition_name: preloader
+  file_name: preloader_daisy.bin
+  is_download: true
+  type: SV5_BL_BIN
+  partition_size: 0x40000
+
+- partition_index: SYS1
+  partition_name: pgpt
+  file_name: PGPT
+  is_download: true
+
+- partition_index: SYS2
+  partition_name: boot
+  file_name: boot.img
+  is_download: true
+
+- partition_index: SYS3
+  partition_name: userdata
+  file_name: NONE
+  is_download: false
+"""
+
+
+class TestScatter:
+    def test_parsea_los_bloques(self):
+        entradas = validar._parsear_scatter(SCATTER_EJEMPLO)
+        nombres = [e["partition_name"] for e in entradas]
+        assert nombres == ["preloader", "pgpt", "boot", "userdata"]
+
+    def test_mapea_particion_a_archivo(self, tmp_path):
+        (tmp_path / "MT6768_scatter.txt").write_text(SCATTER_EJEMPLO)
+        (tmp_path / "preloader_daisy.bin").write_bytes(b"\x00")
+        (tmp_path / "boot.img").write_bytes(b"\x00")
+        (tmp_path / "pgpt").write_bytes(b"\x00")
+
+        imagenes = validar._imagenes_del_scatter(
+            tmp_path / "MT6768_scatter.txt", tmp_path
+        )
+        # userdata queda fuera: file_name NONE + is_download false.
+        assert set(imagenes) == {"preloader", "boot", "pgpt"}
+        assert imagenes["boot"].name == "boot.img"
+
+    def test_analizar_usa_el_scatter(self, tmp_path):
+        carpeta = tmp_path / "rom"
+        carpeta.mkdir()
+        (carpeta / "MT6768_Android_scatter.txt").write_text(SCATTER_EJEMPLO)
+        (carpeta / "preloader_daisy.bin").write_bytes(b"\x00")
+        (carpeta / "boot.img").write_bytes(b"\x00")
+        (carpeta / "pgpt").write_bytes(b"\x00")
+
+        firmware = validar.analizar(carpeta)
+        assert firmware.tipo == validar.TIPO_SCATTER
+        # El nombre de partición «preloader» viene del scatter, no del archivo.
+        assert "preloader" in firmware.imagenes
+        assert "boot" in firmware.imagenes
+
+    def test_scatter_ilegible_cae_a_deteccion_por_nombre(self, tmp_path):
+        carpeta = tmp_path / "rom"
+        carpeta.mkdir()
+        # Scatter sin bloques de partición: el análisis no debe quedarse vacío.
+        (carpeta / "raro_scatter.txt").write_text("# nada útil aquí\n")
+        (carpeta / "boot.img").write_bytes(b"\x00")
+        firmware = validar.analizar(carpeta)
+        assert "boot" in firmware.imagenes
+
+
+class TestSparse:
+    def test_detecta_sparse(self, tmp_path):
+        sparse = tmp_path / "super.img"
+        sparse.write_bytes(validar.MAGIA_SPARSE + b"lo que sea")
+        assert validar.es_imagen_sparse(sparse)
+
+    def test_una_imagen_raw_no_es_sparse(self, tmp_path):
+        raw = tmp_path / "boot.img"
+        raw.write_bytes(b"ANDROID!" + b"\x00" * 100)
+        assert not validar.es_imagen_sparse(raw)
+
+    def test_avisa_de_imagenes_sparse_enteras(self, tmp_path):
+        carpeta = tmp_path / "rom"
+        carpeta.mkdir()
+        (carpeta / "boot.img").write_bytes(b"\x00" * 64)
+        (carpeta / "super.img").write_bytes(validar.MAGIA_SPARSE + b"\x00" * 64)
+        firmware = validar.analizar(carpeta)
+        assert "super" in firmware.imagenes  # está, pero avisada
+        assert any("sparse" in aviso for aviso in firmware.avisos)
+
+
+class TestUnirPartidas:
+    def test_agrupa_y_ordena(self, tmp_path):
+        (tmp_path / "super.img.0").write_bytes(b"a")
+        (tmp_path / "super.img.2").write_bytes(b"c")
+        (tmp_path / "super.img.1").write_bytes(b"b")
+        grupos = validar.agrupar_imagenes_partidas(tmp_path)
+        assert [p.name for p in grupos["super"]] == [
+            "super.img.0", "super.img.1", "super.img.2"
+        ]
+
+    def test_une_en_orden(self, tmp_path):
+        partes = []
+        for i, contenido in enumerate([b"uno", b"dos", b"tres"]):
+            p = tmp_path / f"x.img.{i}"
+            p.write_bytes(contenido)
+            partes.append(p)
+        destino = validar.unir_imagenes_partidas(partes, tmp_path / "x.img")
+        assert destino.read_bytes() == b"unodostres"
 
 
 class TestCompatibilidad:

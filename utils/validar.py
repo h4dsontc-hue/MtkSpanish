@@ -21,6 +21,7 @@ cambia es cómo se llega hasta él y qué avisos hay que darle al usuario.
 from __future__ import annotations
 
 import re
+import shutil
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -155,6 +156,129 @@ def _leer_android_info(carpeta: Path) -> tuple[str, str]:
     return "", ""
 
 
+# Magia de las imágenes Android «sparse» (0xED26FF3A, little-endian). MTKClient
+# escribe en crudo, sin convertir, así que una imagen sparse escrita tal cual
+# deja la partición con basura. Hay que detectarlas y avisar.
+MAGIA_SPARSE = b"\x3a\xff\x26\xed"
+
+
+def es_imagen_sparse(ruta: Path) -> bool:
+    """¿El archivo es una imagen Android sparse (no se puede escribir en crudo)?"""
+    try:
+        with open(ruta, "rb") as fichero:
+            return fichero.read(4) == MAGIA_SPARSE
+    except OSError:
+        return False
+
+
+def _parsear_scatter(texto: str) -> list[dict[str, str]]:
+    """Extrae de un scatter MediaTek la lista de particiones.
+
+    El scatter es un YAML donde cada partición es un bloque que empieza por
+    `- partition_index:`. De cada uno interesan tres campos: el nombre de la
+    partición, el archivo que le corresponde y si está marcada para escribir
+    (`is_download`). Se parsea a mano para no añadir una dependencia de YAML
+    por tres campos.
+    """
+    entradas: list[dict[str, str]] = []
+    bloque: dict[str, str] = {}
+
+    def cerrar() -> None:
+        if "partition_name" in bloque:
+            entradas.append(bloque.copy())
+
+    campo = re.compile(
+        r"-?\s*(partition_name|file_name|is_download)\s*:\s*(.+?)\s*$", re.I
+    )
+    for linea in texto.splitlines():
+        stripped = linea.strip()
+        if stripped.startswith("- partition_index:") or stripped.startswith("- general:"):
+            cerrar()
+            bloque = {}
+            continue
+        coincidencia = campo.match(stripped)
+        if coincidencia:
+            clave = coincidencia.group(1).lower()
+            valor = coincidencia.group(2).strip().strip("\"'")
+            bloque[clave] = valor
+    cerrar()
+    return entradas
+
+
+def _imagenes_del_scatter(scatter: Path, carpeta: Path) -> dict[str, Path]:
+    """Mapa {partición: archivo} según lo que declara el scatter.
+
+    Es más fiable que adivinar por el nombre del archivo: usa los nombres de
+    partición del fabricante y respeta `is_download` (salta las que el propio
+    scatter marca como que no se escriben).
+    """
+    try:
+        texto = scatter.read_text(errors="replace")
+    except OSError:
+        return {}
+
+    imagenes: dict[str, Path] = {}
+    for entrada in _parsear_scatter(texto):
+        nombre = entrada.get("partition_name", "").lower()
+        fichero = entrada.get("file_name", "")
+        descargable = entrada.get("is_download", "").lower() in ("true", "1")
+        if not nombre or not descargable:
+            continue
+        if not fichero or fichero.upper() == "NONE":
+            continue
+        ruta = scatter.parent / fichero
+        if not ruta.is_file():
+            ruta = _buscar_archivo(carpeta, fichero)
+            if ruta is None:
+                continue
+        imagenes[nombre] = ruta
+    return imagenes
+
+
+def _buscar_archivo(carpeta: Path, nombre: str) -> Path | None:
+    """Busca un archivo por nombre, tolerando diferencias de mayúsculas.
+
+    En las ROM reales el nombre del scatter y el del archivo suelen coincidir,
+    pero no siempre en las mayúsculas (PGPT vs pgpt), y perder una partición
+    por eso sería una tontería.
+    """
+    exactos = list(carpeta.rglob(nombre))
+    if exactos:
+        return exactos[0]
+    objetivo = nombre.lower()
+    for archivo in carpeta.rglob("*"):
+        if archivo.is_file() and archivo.name.lower() == objetivo:
+            return archivo
+    return None
+
+
+def agrupar_imagenes_partidas(carpeta: Path) -> dict[str, list[Path]]:
+    """Agrupa los trozos `nombre.img.0`, `nombre.img.1`... por partición, en orden."""
+    grupos: dict[str, list[Path]] = {}
+    for archivo in carpeta.rglob("*"):
+        coincidencia = re.match(r"(.+?)\.img\.(\d+)$", archivo.name, re.I)
+        if archivo.is_file() and coincidencia:
+            grupos.setdefault(coincidencia.group(1).lower(), []).append(archivo)
+    for nombre, trozos in grupos.items():
+        trozos.sort(key=lambda p: int(re.search(r"\.(\d+)$", p.name).group(1)))
+    return grupos
+
+
+def unir_imagenes_partidas(trozos: list[Path], destino: Path) -> Path:
+    """Une los trozos crudos de una imagen partida en un solo archivo.
+
+    Solo vale para trozos EN CRUDO (raw). Si son sparse hay que convertirlos
+    con simg2img primero: concatenar sparse no da una imagen válida, y por eso
+    `analizar` avisa antes de dejar que se llegue aquí.
+    """
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with open(destino, "wb") as salida:
+        for trozo in trozos:
+            with open(trozo, "rb") as entrada:
+                shutil.copyfileobj(entrada, salida)
+    return destino
+
+
 def _codename_del_nombre(carpeta: Path) -> str:
     """Las ROM de Xiaomi vienen en carpetas tipo `daisy_global_images_V11.0.5.0_...`."""
     coincidencia = re.match(r"^([a-z0-9]+)_", carpeta.name.lower())
@@ -195,7 +319,39 @@ def analizar(ruta: str | Path) -> Firmware:
     else:
         firmware.tipo = TIPO_PARTICIONES
 
-    firmware.imagenes = _buscar_imagenes(carpeta)
+    # Con scatter, el mapa partición→archivo lo da el propio fabricante; es más
+    # fiable que deducirlo del nombre de cada archivo. Si el scatter no aporta
+    # nada útil, se cae a la deducción por nombre.
+    firmware.imagenes = {}
+    if firmware.scatter is not None:
+        firmware.imagenes = _imagenes_del_scatter(firmware.scatter, carpeta)
+    if not firmware.imagenes:
+        firmware.imagenes = _buscar_imagenes(carpeta)
+
+    # Unir las imágenes partidas en crudo (super.img.0 + super.img.1 + ...).
+    # Las que son sparse no se pueden concatenar sin más, así que se avisa
+    # (más abajo) y se dejan fuera en vez de armar una imagen corrupta.
+    for nombre, trozos in agrupar_imagenes_partidas(carpeta).items():
+        if nombre in firmware.imagenes:
+            continue
+        if any(es_imagen_sparse(t) for t in trozos):
+            firmware.avisos.append(
+                f"La partición «{nombre}» viene partida en {len(trozos)} trozos de "
+                "formato sparse. No se pueden unir en crudo (harían falta las "
+                "herramientas de Android «simg2img»), así que esa partición se queda "
+                "sin escribir. Busca una versión del firmware que no venga partida."
+            )
+            continue
+        destino = carpeta / f"{nombre}.img"
+        try:
+            unir_imagenes_partidas(trozos, destino)
+            firmware.imagenes[nombre] = destino
+            firmware.avisos.append(
+                f"La partición «{nombre}» venía en {len(trozos)} trozos y se han unido "
+                "automáticamente."
+            )
+        except OSError as exc:
+            firmware.avisos.append(f"No se pudieron unir los trozos de «{nombre}»: {exc}")
 
     codename, version = _leer_android_info(carpeta)
     firmware.codename = codename or _codename_del_nombre(carpeta)
@@ -229,12 +385,20 @@ def analizar(ruta: str | Path) -> Firmware:
             "y sobrescribirlas te dejaría sin cobertura."
         )
 
-    partidas = [a for a in carpeta.rglob("*.img.*") if re.search(r"\.img\.\d+$", a.name)]
-    if partidas:
+    # Imágenes sparse enteras (no partidas): MTKClient las escribe en crudo y el
+    # resultado no arranca. Aún no se convierten solas, pero avisar evita el
+    # flasheo silenciosamente roto.
+    sparse = sorted(
+        nombre
+        for nombre, ruta in firmware.imagenes.items()
+        if ruta.is_file() and es_imagen_sparse(ruta)
+    )
+    if sparse:
         firmware.avisos.append(
-            f"Hay {len(partidas)} archivos de imagen partidos en trozos "
-            "(super.img.0, super.img.1...). Esta herramienta no los sabe unir, "
-            "así que esas particiones se quedarán sin escribir."
+            f"Estas imágenes están en formato sparse: {', '.join(sparse)}. "
+            "MTKClient las escribe en crudo, así que podrían no arrancar. Si el "
+            "móvil no arranca tras el flasheo, busca una versión del firmware con "
+            "esas imágenes en crudo (raw)."
         )
 
     return firmware
