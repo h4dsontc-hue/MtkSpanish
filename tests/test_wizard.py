@@ -380,6 +380,45 @@ class TestPasoFlash:
 
         assert paso.barra.cget("_valor") == pytest.approx(1.0)
 
+    def test_reintentar_tras_cancelar_no_arrastra_el_estado(self, wizard, tmp_path):
+        # Un segundo intento que sale bien no puede reportarse como cancelado
+        # solo porque el primero lo fuera.
+        paso = self._preparar(wizard, tmp_path)
+        paso.operacion_en_curso = True
+        paso._al_terminar(-1)
+        assert wizard.estado.flash_cancelado is True
+
+        DIALOGOS.respuesta_si_no = True
+        wizard.estado.dispositivo = Dispositivo(modo="MODO_INVENTADO", codename="x")
+        paso._empezar()  # cae en la rama «no sé flashear en este modo»
+        assert wizard.estado.flash_cancelado is False
+
+    def test_cancelar_mientras_prepara_no_llega_a_escribir(self, wizard, tmp_path, monkeypatch):
+        # El botón Cancelar está activo desde el primer segundo, pero preparar
+        # las imágenes tarda. Cancelar ahí debe abortar, no escribir igual.
+        import time
+
+        from core import mtk
+
+        escrituras = []
+        monkeypatch.setattr(
+            mtk, "flashear_carpeta", lambda *a, **k: escrituras.append(a) or None
+        )
+
+        paso = self._preparar(wizard, tmp_path)
+        paso.operacion_en_curso = True
+        paso._flashear_por_brom()
+        wizard.estado.flash_cancelado = True  # el usuario pulsa Cancelar
+
+        for _ in range(200):
+            wizard._vaciar_cola()
+            if not paso.operacion_en_curso:
+                break
+            time.sleep(0.01)
+
+        assert escrituras == []
+        assert wizard.estado.flash_cancelado is True
+
     def test_no_se_puede_salir_mientras_escribe(self, wizard, tmp_path):
         paso = self._preparar(wizard, tmp_path)
         paso.operacion_en_curso = True

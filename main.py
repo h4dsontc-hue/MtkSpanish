@@ -11,6 +11,11 @@ que un traceback de Python.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+# Para que `python3 /ruta/larga/main.py` funcione desde cualquier directorio y
+# no solo estando dentro de la carpeta del proyecto.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 MINIMO_PYTHON = (3, 10)
 

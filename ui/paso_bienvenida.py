@@ -68,8 +68,9 @@ class PasoBienvenida(PasoBase):
             tarjeta, text="", font=base.fuente_normal(), text_color=base.GRIS
         )
 
-        botones = ctk.CTkFrame(tarjeta, fg_color="transparent")
-        botones.pack(fill="x", padx=16, pady=14)
+        self.botones = ctk.CTkFrame(tarjeta, fg_color="transparent")
+        self.botones.pack(fill="x", padx=16, pady=14)
+        botones = self.botones
 
         self.boton_preparar = ctk.CTkButton(
             botones, text="Preparar sistema", width=180, command=self._preparar
@@ -135,9 +136,13 @@ class PasoBienvenida(PasoBase):
 
     def _preparar(self) -> None:
         self.boton_preparar.configure(state="disabled", text="Preparando...")
-        self.barra.pack(fill="x", padx=16, pady=(8, 0))
+        # `before=` para que la barra salga encima de los botones: pack los
+        # coloca en orden de llamada, y estos ya están puestos desde construir().
+        self.barra.pack(fill="x", padx=16, pady=(8, 0), before=self.botones)
         self.barra.set(0)
-        self.etiqueta_progreso.pack(fill="x", padx=16, pady=(4, 0))
+        self.etiqueta_progreso.pack(
+            fill="x", padx=16, pady=(4, 0), before=self.botones
+        )
         self.wizard.decir("Se te pedirá la contraseña de administrador...", base.AZUL)
 
         def avanzar(nombre: str, hecho: int, total: int) -> None:

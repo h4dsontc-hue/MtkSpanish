@@ -160,8 +160,13 @@ class PasoFlash(PasoBase):
         if not messagebox.askyesno("Última confirmación", AVISO_FINAL, icon="warning"):
             return
 
+        # Sin este reinicio, un segundo intento tras una cancelación arrastraría
+        # `flash_cancelado = True` y el paso 5 diría «cancelado» aunque esta vez
+        # hubiera salido bien.
+        self.estado.reiniciar_flasheo()
         self.operacion_en_curso = True
         self.hubo_errores = False
+        self.seguimiento = None
         self.boton_empezar.configure(state="disabled", text="Reinstalando...")
         self.boton_cancelar.configure(state="normal")
         self.wizard.bloquear_navegacion(True)
@@ -197,6 +202,13 @@ class PasoFlash(PasoBase):
                 self._al_terminar(1)
                 return
             self.carpeta_temporal = carpeta
+            # Preparar las imágenes tarda, y el botón «Cancelar» ya está activo
+            # durante ese rato. Si el usuario canceló mientras tanto, no hay
+            # que empezar a escribir: sería justo lo contrario de lo que pidió.
+            if self.estado.flash_cancelado:
+                self._escribir("Cancelado antes de empezar a escribir.")
+                self._al_terminar(-1)
+                return
             self._escribir(f"Imágenes preparadas en {carpeta}")
             self._fase("Escribiendo en la memoria del móvil...")
             self.seguimiento = mtk.flashear_carpeta(
@@ -237,14 +249,22 @@ class PasoFlash(PasoBase):
             resultado = adb.reiniciar_a_fastboot()
             if not resultado.ok:
                 return resultado
-            # El bootloader tarda unos segundos en aparecer por USB.
+            # El bootloader tarda unos segundos en aparecer por USB. Se mira
+            # el flag de cancelación en cada vuelta para no dejar al usuario
+            # veinte segundos esperando a algo que ya no quiere.
             for _ in range(20):
+                if self.estado.flash_cancelado:
+                    return False
                 time.sleep(1)
                 if detector.detectar_modo() == MODO_FASTBOOT:
                     return True
             return False
 
         def continuar(resultado):
+            if self.estado.flash_cancelado:
+                self._escribir("Cancelado durante el reinicio.")
+                self._al_terminar(-1)
+                return
             if resultado is True:
                 self._escribir("El móvil ya está en modo fastboot.")
                 self.estado.dispositivo = fastboot.describir_dispositivo()

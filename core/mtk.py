@@ -62,13 +62,23 @@ class ConfiguracionObjetivo:
         )
 
 
+_interprete_cacheado: str | None = None
+
+
 def _interprete() -> str:
     """El Python con el que lanzar mtk.py.
 
     Se prefiere aquel que pueda importar pyusb: si esta aplicación corre en un
     entorno virtual sin pyusb pero el Python del sistema sí lo tiene, hay que
     usar el del sistema o MTKClient ni arrancará.
+
+    El resultado se guarda: averiguarlo cuesta hasta tres subprocesos, y esto
+    se llama en cada orden que se le manda a MTKClient.
     """
+    global _interprete_cacheado
+    if _interprete_cacheado is not None:
+        return _interprete_cacheado
+
     candidatos = [sys.executable, shutil.which("python3"), shutil.which("python")]
     for candidato in candidatos:
         if not candidato:
@@ -82,8 +92,10 @@ def _interprete() -> str:
         except (OSError, subprocess.TimeoutExpired):
             continue
         if comprobacion.returncode == 0:
+            _interprete_cacheado = candidato
             return candidato
-    return sys.executable
+    _interprete_cacheado = sys.executable
+    return _interprete_cacheado
 
 
 def ruta_mtk() -> str:

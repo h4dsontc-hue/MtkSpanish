@@ -136,7 +136,10 @@ def preparar_sistema(al_avanzar=None) -> ResultadoPreparacion:
     elif metodo == "pkexec":
         comando = ["pkexec", "/bin/sh", ruta_script]
     else:
-        comando = ["sudo", "-S", "/bin/sh", ruta_script]
+        # `-n` es imprescindible: sin terminal donde escribir, un sudo que pida
+        # contraseña se quedaría esperando para siempre y colgaría la ventana.
+        # Así falla al instante y se le puede decir al usuario qué hacer.
+        comando = ["sudo", "-n", "/bin/sh", ruta_script]
 
     try:
         proceso = subprocess.Popen(
@@ -192,6 +195,19 @@ def preparar_sistema(al_avanzar=None) -> ResultadoPreparacion:
             ok=False,
             mensaje="No se encontró el programa para pedir la contraseña",
             detalle=salida,
+        )
+    if metodo == "sudo" and codigo == 1 and "password" in salida.lower():
+        return ResultadoPreparacion(
+            ok=False,
+            mensaje="Hace falta la contraseña y aquí no se puede pedir",
+            detalle=(
+                "Este sistema no tiene pkexec, así que no hay forma de mostrarte "
+                "el diálogo de contraseña desde la ventana.\n\n"
+                "Abre una terminal y ejecuta:\n\n"
+                "    sudo -v\n\n"
+                "Después vuelve aquí y pulsa «Preparar sistema» otra vez.\n"
+                "(O instala policykit-1, que es la solución definitiva.)"
+            ),
         )
     return ResultadoPreparacion(
         ok=False,
