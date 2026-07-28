@@ -20,6 +20,7 @@ cambia es cómo se llega hasta él y qué avisos hay que darle al usuario.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import zipfile
@@ -431,6 +432,150 @@ def comprobar_compatibilidad(firmware: Firmware, codename_dispositivo: str) -> t
         "Flashear el firmware de otro modelo puede dejar el móvil inservible de forma "
         "permanente. Descarga el que corresponde a tu modelo exacto."
     )
+
+
+# ─────────────────────── verificación de integridad ───────────────────────
+#
+# Una descarga corrupta escrita en el móvil es un brick silencioso: todo parece
+# ir bien y luego no arranca. Si el firmware trae checksums (md5sum.txt, o un
+# .md5/.sha256 junto a cada imagen), se pueden comprobar antes de flashear.
+
+# La longitud del hash en hex delata el algoritmo, así no hay que adivinarlo.
+_ALGO_POR_LONGITUD = {32: "md5", 40: "sha1", 64: "sha256"}
+
+_FICHEROS_CHECKSUM = {"md5sum.txt", "md5sums", "sha1sum.txt", "sha256sum.txt", "sha256sums"}
+_EXT_CHECKSUM = {".md5", ".sha1", ".sha256"}
+
+
+@dataclass
+class ResultadoIntegridad:
+    verificados: list[tuple[str, bool]] = field(default_factory=list)  # (nombre, coincide)
+    sin_hash: list[str] = field(default_factory=list)
+
+    @property
+    def hay_hashes(self) -> bool:
+        return bool(self.verificados)
+
+    @property
+    def todo_ok(self) -> bool:
+        return all(coincide for _, coincide in self.verificados)
+
+    @property
+    def fallidos(self) -> list[str]:
+        return [nombre for nombre, coincide in self.verificados if not coincide]
+
+    def resumen(self) -> str:
+        if not self.hay_hashes:
+            return (
+                "Este firmware no trae checksums, así que no se puede comprobar su "
+                "integridad. Descárgalo de una fuente fiable."
+            )
+        if self.todo_ok:
+            extra = ""
+            if self.sin_hash:
+                extra = f" ({len(self.sin_hash)} imágenes sin hash que comprobar)"
+            return f"Integridad correcta: {len(self.verificados)} imágenes verificadas{extra}."
+        return (
+            f"¡ATENCIÓN! Estas imágenes NO coinciden con su checksum: "
+            f"{', '.join(self.fallidos)}.\n"
+            "La descarga está corrupta o incompleta. NO la flashees: vuelve a "
+            "descargar el firmware."
+        )
+
+
+def hash_de_archivo(
+    ruta: Path, algo: str, al_progresar=None, _bloque: int = 1024 * 1024
+) -> str:
+    """Calcula el hash de un archivo por trozos (las imágenes pesan gigas)."""
+    digest = hashlib.new(algo)
+    total = ruta.stat().st_size or 1
+    leido = 0
+    with open(ruta, "rb") as fichero:
+        while True:
+            trozo = fichero.read(_bloque)
+            if not trozo:
+                break
+            digest.update(trozo)
+            leido += len(trozo)
+            if al_progresar:
+                al_progresar(leido / total * 100)
+    return digest.hexdigest()
+
+
+def _checksums_declarados(carpeta: Path) -> dict[str, tuple[str, str]]:
+    """Lee los checksums que trae el firmware: {nombre_archivo: (algo, hash)}."""
+    declarados: dict[str, tuple[str, str]] = {}
+    for fichero in carpeta.rglob("*"):
+        if not fichero.is_file():
+            continue
+        nombre = fichero.name.lower()
+        es_lista = nombre in _FICHEROS_CHECKSUM
+        es_suelto = fichero.suffix.lower() in _EXT_CHECKSUM
+        if not (es_lista or es_suelto):
+            continue
+        try:
+            texto = fichero.read_text(errors="replace")
+        except OSError:
+            continue
+
+        encontrado_en_lista = False
+        for linea in texto.splitlines():
+            coincidencia = re.match(r"\s*([0-9a-fA-F]{32,64})\s+\*?(.+?)\s*$", linea)
+            if not coincidencia:
+                continue
+            hsh = coincidencia.group(1).lower()
+            algo = _ALGO_POR_LONGITUD.get(len(hsh))
+            if algo:
+                archivo = Path(coincidencia.group(2)).name.lower()
+                declarados[archivo] = (algo, hsh)
+                encontrado_en_lista = True
+
+        # Un `.md5` suelto puede contener solo el hash, para el archivo con su
+        # mismo nombre base (boot.img.md5 -> boot.img).
+        if es_suelto and not encontrado_en_lista:
+            bruto = texto.strip().split()[0].lower() if texto.strip() else ""
+            algo = _ALGO_POR_LONGITUD.get(len(bruto))
+            if algo and re.fullmatch(r"[0-9a-fA-F]+", bruto):
+                declarados[fichero.stem.lower()] = (algo, bruto)
+    return declarados
+
+
+def verificar_integridad(
+    firmware: "Firmware", al_progresar=None
+) -> ResultadoIntegridad:
+    """Comprueba las imágenes del firmware contra los checksums que trae.
+
+    Solo verifica las imágenes que tienen un hash declarado; el resto va a
+    `sin_hash`. Si el firmware no trae ningún checksum, el resultado lo dice.
+    """
+    declarados = _checksums_declarados(firmware.ruta)
+    resultado = ResultadoIntegridad()
+
+    total = len(firmware.imagenes) or 1
+    for indice, (particion, ruta) in enumerate(sorted(firmware.imagenes.items())):
+        clave = None
+        if ruta.name.lower() in declarados:
+            clave = ruta.name.lower()
+        elif ruta.stem.lower() in declarados:
+            clave = ruta.stem.lower()
+
+        if clave is None:
+            resultado.sin_hash.append(particion)
+            continue
+
+        algo, esperado = declarados[clave]
+
+        def progreso_archivo(p, base=indice):
+            if al_progresar:
+                al_progresar((base + p / 100) / total * 100)
+
+        try:
+            real = hash_de_archivo(ruta, algo, al_progresar=progreso_archivo)
+        except OSError:
+            resultado.verificados.append((particion, False))
+            continue
+        resultado.verificados.append((particion, real == esperado))
+    return resultado
 
 
 def listar_zip(ruta_zip: str | Path) -> list[str]:

@@ -84,7 +84,23 @@ class PasoFirmware(PasoBase):
             anchor="nw",
             wraplength=800,
         )
-        self.etiqueta_analisis.pack(fill="both", expand=True, padx=16, pady=14)
+        self.etiqueta_analisis.pack(fill="both", expand=True, padx=16, pady=(14, 6))
+
+        self.boton_integridad = ctk.CTkButton(
+            self.tarjeta_analisis,
+            text="Verificar integridad (opcional)",
+            width=240,
+            fg_color=base.GRIS,
+            command=self._verificar_integridad,
+        )
+        self.etiqueta_integridad = ctk.CTkLabel(
+            self.tarjeta_analisis,
+            text="",
+            font=base.fuente_normal(),
+            justify="left",
+            anchor="w",
+            wraplength=800,
+        )
 
     def _elegir_carpeta(self) -> None:
         carpeta = filedialog.askdirectory(title="Carpeta del firmware descomprimido")
@@ -104,6 +120,9 @@ class PasoFirmware(PasoBase):
             )
             self.permitir_avance(False)
             return
+
+        self.boton_integridad.pack_forget()
+        self.etiqueta_integridad.pack_forget()
 
         if firmware.problemas:
             self.estado.firmware = None
@@ -142,6 +161,46 @@ class PasoFirmware(PasoBase):
             f"{len(firmware.imagenes_seguras())} particiones listas para escribir.",
             base.VERDE,
         )
+        self.boton_integridad.pack(padx=16, pady=(0, 6), anchor="w")
+
+    def _verificar_integridad(self) -> None:
+        if self.estado.firmware is None:
+            return
+        self.boton_integridad.configure(state="disabled", text="Verificando...")
+        self.etiqueta_integridad.pack(fill="x", padx=16, pady=(0, 12))
+        self.etiqueta_integridad.configure(
+            text="Calculando checksums (puede tardar en firmwares grandes)...",
+            text_color=base.GRIS,
+        )
+        firmware = self.estado.firmware
+        self.en_segundo_plano(
+            lambda: validar.verificar_integridad(firmware),
+            self._al_verificar_integridad,
+        )
+
+    def _al_verificar_integridad(self, resultado) -> None:
+        self.boton_integridad.configure(
+            state="normal", text="Verificar integridad (opcional)"
+        )
+        if isinstance(resultado, Exception):
+            self.etiqueta_integridad.configure(
+                text=f"No se pudo verificar: {resultado}", text_color=base.ROJO
+            )
+            return
+
+        if not resultado.hay_hashes:
+            color = base.AMBAR
+        elif resultado.todo_ok:
+            color = base.VERDE
+        else:
+            color = base.ROJO
+        self.etiqueta_integridad.configure(text=resultado.resumen(), text_color=color)
+
+        if resultado.hay_hashes and not resultado.todo_ok:
+            # Una imagen corrupta no debe poder flashearse: se bloquea el avance.
+            self.permitir_avance(False)
+            self.wizard.decir("Firmware corrupto: no se puede continuar.", base.ROJO)
+            messagebox.showerror("Firmware corrupto", resultado.resumen())
 
     # ─────────────────────── pestaña: buscar en la web ───────────────────────
 

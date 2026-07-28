@@ -387,6 +387,91 @@ class TestUnirPartidas:
         assert destino.read_bytes() == b"unodostres"
 
 
+class TestIntegridad:
+    def _md5(self, contenido: bytes) -> str:
+        import hashlib
+
+        return hashlib.md5(contenido).hexdigest()
+
+    def test_hash_de_archivo(self, tmp_path):
+        import hashlib
+
+        archivo = tmp_path / "x.img"
+        archivo.write_bytes(b"contenido")
+        assert validar.hash_de_archivo(archivo, "md5") == hashlib.md5(b"contenido").hexdigest()
+        assert validar.hash_de_archivo(archivo, "sha256") == hashlib.sha256(b"contenido").hexdigest()
+
+    def test_verifica_ok_con_md5sum_txt(self, tmp_path):
+        carpeta = tmp_path / "rom"
+        carpeta.mkdir()
+        (carpeta / "boot.img").write_bytes(b"BOOT")
+        (carpeta / "super.img").write_bytes(b"SUPER")
+        (carpeta / "md5sum.txt").write_text(
+            f"{self._md5(b'BOOT')}  boot.img\n{self._md5(b'SUPER')}  super.img\n"
+        )
+        firmware = validar.analizar(carpeta)
+        resultado = validar.verificar_integridad(firmware)
+        assert resultado.hay_hashes
+        assert resultado.todo_ok
+        assert not resultado.fallidos
+
+    def test_detecta_una_imagen_corrupta(self, tmp_path):
+        carpeta = tmp_path / "rom"
+        carpeta.mkdir()
+        (carpeta / "boot.img").write_bytes(b"BOOT-CORRUPTO")
+        (carpeta / "md5sum.txt").write_text(f"{self._md5(b'BOOT')}  boot.img\n")
+        firmware = validar.analizar(carpeta)
+        resultado = validar.verificar_integridad(firmware)
+        assert not resultado.todo_ok
+        assert "boot" in resultado.fallidos
+        assert "corrupt" in resultado.resumen().lower()
+
+    def test_sin_checksums(self, tmp_path):
+        carpeta = tmp_path / "rom"
+        carpeta.mkdir()
+        (carpeta / "boot.img").write_bytes(b"BOOT")
+        firmware = validar.analizar(carpeta)
+        resultado = validar.verificar_integridad(firmware)
+        assert not resultado.hay_hashes
+        assert "no trae checksums" in resultado.resumen().lower()
+
+    def test_md5_suelto_con_solo_el_hash(self, tmp_path):
+        carpeta = tmp_path / "rom"
+        carpeta.mkdir()
+        (carpeta / "boot.img").write_bytes(b"BOOT")
+        # boot.img.md5 con únicamente el hash dentro.
+        (carpeta / "boot.img.md5").write_text(self._md5(b"BOOT") + "\n")
+        firmware = validar.analizar(carpeta)
+        resultado = validar.verificar_integridad(firmware)
+        assert resultado.hay_hashes
+        assert resultado.todo_ok
+
+    def test_sha256sum(self, tmp_path):
+        import hashlib
+
+        carpeta = tmp_path / "rom"
+        carpeta.mkdir()
+        (carpeta / "boot.img").write_bytes(b"BOOT")
+        (carpeta / "sha256sum.txt").write_text(
+            f"{hashlib.sha256(b'BOOT').hexdigest()} *boot.img\n"
+        )
+        firmware = validar.analizar(carpeta)
+        resultado = validar.verificar_integridad(firmware)
+        assert resultado.todo_ok
+
+    def test_imagenes_sin_hash_van_aparte(self, tmp_path):
+        carpeta = tmp_path / "rom"
+        carpeta.mkdir()
+        (carpeta / "boot.img").write_bytes(b"BOOT")
+        (carpeta / "super.img").write_bytes(b"SUPER")
+        # Solo boot tiene checksum.
+        (carpeta / "md5sum.txt").write_text(f"{self._md5(b'BOOT')}  boot.img\n")
+        firmware = validar.analizar(carpeta)
+        resultado = validar.verificar_integridad(firmware)
+        assert resultado.todo_ok
+        assert "super" in resultado.sin_hash
+
+
 class TestCompatibilidad:
     def test_coinciden(self, tmp_path):
         firmware = validar.analizar(crear_rom_fastboot(tmp_path, "lancelot"))

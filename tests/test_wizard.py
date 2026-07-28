@@ -302,6 +302,27 @@ class TestPasoFirmware:
         paso._al_buscar([])
         assert "No se ha encontrado" in paso.etiqueta_busqueda.cget("text")
 
+    def test_integridad_correcta_no_bloquea(self, wizard):
+        from utils.validar import ResultadoIntegridad
+
+        paso = wizard.pasos[2]
+        wizard.estado.firmware = object()
+        paso._al_verificar_integridad(
+            ResultadoIntegridad(verificados=[("boot", True), ("super", True)])
+        )
+        assert "correcta" in paso.etiqueta_integridad.cget("text").lower()
+        assert wizard.boton_siguiente.cget("state") == "normal"
+
+    def test_firmware_corrupto_bloquea_el_avance(self, wizard):
+        from utils.validar import ResultadoIntegridad
+
+        paso = wizard.pasos[2]
+        paso._al_verificar_integridad(
+            ResultadoIntegridad(verificados=[("boot", False)])
+        )
+        assert wizard.boton_siguiente.cget("state") == "disabled"
+        assert any(ll[0] == "showerror" for ll in DIALOGOS.llamadas)
+
 
 class TestPasoFlash:
     def _preparar(self, wizard, tmp_path, modo=MODO_BROM, codename="lancelot"):

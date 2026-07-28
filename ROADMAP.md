@@ -36,8 +36,10 @@
       las particiones esenciales, que el codename coincida, **se parsea el
       scatter de verdad** (partición→archivo según el fabricante, respetando
       `is_download`), se **unen las imágenes partidas en crudo** y se **avisa de
-      las imágenes sparse** (que MTKClient escribe mal). **Falta** convertir las
-      sparse con simg2img y verificar checksums.
+      las imágenes sparse** (que MTKClient escribe mal) y se **verifica la
+      integridad** contra los checksums que traiga el firmware (md5sum.txt,
+      *.md5/.sha1/.sha256): un firmware corrupto NO se puede flashear. **Falta**
+      convertir las sparse con simg2img.
 - [x] Historial de dispositivos flasheados con fecha y firmware usado *(JSON en
       la carpeta de datos del usuario; se registra solo al terminar cada rescate
       y se consulta en «Herramientas → Ver historial»)*
