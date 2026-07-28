@@ -104,6 +104,11 @@ class VentanaHerramientas(ctk.CTkToplevel):
             habilitado=modo in herramientas.MODOS_BROM,
             motivo="Solo en modo BROM/preloader.",
         )
+        self._boton(
+            rejilla, 3, 1, "Ver historial de rescates",
+            "Qué se ha flasheado antes, cuándo y cómo acabó.",
+            self._ver_historial,
+        )
 
         self.etiqueta_fase = ctk.CTkLabel(
             self, text="", font=base.fuente_normal(), text_color=base.GRIS, anchor="w"
@@ -171,6 +176,11 @@ class VentanaHerramientas(ctk.CTkToplevel):
                 self._fin_generico, c, "Sesión BROM"
             ),
         )
+
+    def _ver_historial(self):
+        from core import historial
+
+        self._mostrar_guia("Historial de rescates", historial.texto_completo())
 
     def _info(self):
         from core import detector

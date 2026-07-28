@@ -451,7 +451,31 @@ class PasoFlash(PasoBase):
             self.estado.mensaje_error = str(explicacion)
             self.wizard.decir("Hubo errores. Pulsa «Siguiente» para ver qué pasó.", base.ROJO)
 
+        self._registrar_en_historial(cancelado, correcto)
         self.permitir_avance(True)
+
+    def _registrar_en_historial(self, cancelado: bool, correcto: bool) -> None:
+        from core import historial
+
+        if cancelado:
+            resultado = historial.RESULTADO_CANCELADO
+        elif correcto:
+            resultado = historial.RESULTADO_OK
+        else:
+            resultado = historial.RESULTADO_ERROR
+
+        dispositivo = self.estado.dispositivo
+        firmware = self.estado.firmware
+        entrada = historial.Entrada.ahora(
+            modelo=dispositivo.modelo if dispositivo else "",
+            codename=dispositivo.codename if dispositivo else "",
+            modo=dispositivo.modo if dispositivo else "",
+            firmware=(firmware.version or firmware.nombre_tipo) if firmware else "",
+            resultado=resultado,
+            backup=self.estado.ruta_backup,
+        )
+        # Nunca dejar que un fallo del historial afecte al flasheo, que ya terminó.
+        historial.registrar(entrada)
 
     def _limpiar_temporales(self) -> None:
         if self.carpeta_temporal is None:

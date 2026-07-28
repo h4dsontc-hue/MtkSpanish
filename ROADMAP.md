@@ -38,7 +38,9 @@
       `is_download`), se **unen las imágenes partidas en crudo** y se **avisa de
       las imágenes sparse** (que MTKClient escribe mal). **Falta** convertir las
       sparse con simg2img y verificar checksums.
-- [ ] Historial de dispositivos flasheados con fecha y firmware usado
+- [x] Historial de dispositivos flasheados con fecha y firmware usado *(JSON en
+      la carpeta de datos del usuario; se registra solo al terminar cada rescate
+      y se consulta en «Herramientas → Ver historial»)*
 - [ ] Detector de cable USB malo (uno de los problemas más comunes)
 
 ---

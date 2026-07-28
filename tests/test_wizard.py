@@ -443,6 +443,19 @@ class TestPasoFlash:
         assert wizard.estado.flash_cancelado is True
         assert wizard.estado.flash_correcto is False
 
+    def test_el_flasheo_queda_en_el_historial(self, wizard, tmp_path, monkeypatch):
+        from core import historial
+
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "datos"))
+        paso = self._preparar(wizard, tmp_path, MODO_BROM, "lancelot")
+        paso.operacion_en_curso = True
+        paso._al_terminar(0)
+
+        entradas = historial.entradas()
+        assert len(entradas) == 1
+        assert entradas[0].codename == "lancelot"
+        assert entradas[0].resultado == historial.RESULTADO_OK
+
     def test_la_barra_sigue_el_progreso(self, wizard, tmp_path):
         paso = self._preparar(wizard, tmp_path)
         paso._progreso(45.0)
