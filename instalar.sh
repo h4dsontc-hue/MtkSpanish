@@ -5,12 +5,11 @@
 #   sh instalar.sh              instala de verdad
 #   sh instalar.sh --dry-run    enseña lo que haría, sin tocar nada
 #
-# Hace, en orden:
-#   1. instala las dependencias del sistema (python3-tk, adb, fastboot, git)
-#   2. clona MTKClient en ~/mtkclient si no está, y sus dependencias
-#   3. instala las dependencias de Python de la app
-#   4. crea el comando «rescatemtk» en ~/.local/bin
-#   5. crea el lanzador del menú (icono incluido si hay logo)
+# Todo lo de Python va a un entorno virtual propio (.venv) por dos motivos:
+#   - las distros modernas (PEP 668) no dejan instalar con pip en el sistema;
+#   - así no se pisan versiones con otros programas.
+# El venv se crea con --system-site-packages para ver el tkinter del sistema,
+# que NO se instala con pip (viene en python3-tk).
 
 set -eu
 
@@ -19,9 +18,11 @@ if [ "${1:-}" = "--dry-run" ] || [ "${1:-}" = "-n" ]; then
     DRY_RUN=1
 fi
 
-# Carpeta donde está este script = raíz del proyecto.
 DIR_APP=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 DIR_MTKCLIENT="$HOME/mtkclient"
+VENV="$DIR_APP/.venv"
+PY_VENV="$VENV/bin/python3"
+PIP_VENV="$VENV/bin/pip"
 BIN_LOCAL="$HOME/.local/bin"
 LANZADOR="$BIN_LOCAL/rescatemtk"
 DESKTOP="$HOME/.local/share/applications/rescatemtk.desktop"
@@ -51,67 +52,86 @@ detectar_gestor() {
 }
 
 instalar_deps_sistema() {
-    azul "[1/5] Dependencias del sistema"
+    azul "[1/6] Dependencias del sistema"
     gestor=$(detectar_gestor || true)
     if [ -z "${gestor:-}" ]; then
         rojo "   No reconozco tu gestor de paquetes."
-        echo  "   Instala a mano: tkinter de Python, adb, fastboot y git."
+        echo  "   Instala a mano: tkinter y venv de Python, adb, fastboot, git y libusb."
         return 0
     fi
 
+    # libusb hace falta para que MTKClient (pyusb) pueda hablar por USB.
     case "$gestor" in
         apt-get)
             ejecutar sudo apt-get update
-            ejecutar sudo apt-get install -y python3-tk python3-pip \
-                android-tools-adb android-tools-fastboot git
+            ejecutar sudo apt-get install -y python3-tk python3-venv python3-pip \
+                android-tools-adb android-tools-fastboot git libusb-1.0-0
             ;;
         dnf)
-            ejecutar sudo dnf install -y python3-tkinter python3-pip android-tools git
+            ejecutar sudo dnf install -y python3-tkinter python3-pip android-tools \
+                git libusbx
             ;;
         pacman)
-            ejecutar sudo pacman -S --needed --noconfirm tk python-pip android-tools git
+            ejecutar sudo pacman -S --needed --noconfirm tk python-pip android-tools \
+                git libusb
             ;;
         zypper)
-            ejecutar sudo zypper install -y python3-tk python3-pip android-tools git
+            ejecutar sudo zypper install -y python3-tk python3-pip android-tools \
+                git libusb-1_0-0
             ;;
     esac
     verde "   Dependencias del sistema listas."
 }
 
-# ─────────────────────── 2. MTKClient ───────────────────────
+# ─────────────────────── 2. entorno virtual ───────────────────────
+
+crear_entorno_virtual() {
+    azul "[2/6] Entorno virtual de Python"
+    if [ -d "$VENV" ]; then
+        verde "   Ya existe en $VENV."
+    else
+        # --system-site-packages para ver el tkinter del sistema (python3-tk),
+        # que no se puede instalar con pip.
+        ejecutar python3 -m venv --system-site-packages "$VENV"
+    fi
+    ejecutar "$PIP_VENV" install --upgrade pip
+    verde "   Entorno virtual listo."
+}
+
+# ─────────────────────── 3. MTKClient ───────────────────────
 
 instalar_mtkclient() {
-    azul "[2/5] MTKClient"
+    azul "[3/6] MTKClient"
     if [ -f "$DIR_MTKCLIENT/mtk.py" ]; then
         verde "   Ya está en $DIR_MTKCLIENT."
     else
         ejecutar git clone https://github.com/bkerler/mtkclient "$DIR_MTKCLIENT"
     fi
     if [ -f "$DIR_MTKCLIENT/requirements.txt" ] || [ "$DRY_RUN" = "1" ]; then
-        ejecutar python3 -m pip install --user -r "$DIR_MTKCLIENT/requirements.txt"
+        ejecutar "$PIP_VENV" install -r "$DIR_MTKCLIENT/requirements.txt"
     fi
     verde "   MTKClient listo."
 }
 
-# ─────────────────────── 3. dependencias de la app ───────────────────────
+# ─────────────────────── 4. dependencias de la app ───────────────────────
 
 instalar_deps_app() {
-    azul "[3/5] Dependencias de RescateMTK"
-    ejecutar python3 -m pip install --user -r "$DIR_APP/requirements.txt"
+    azul "[4/6] Dependencias de RescateMTK"
+    ejecutar "$PIP_VENV" install -r "$DIR_APP/requirements.txt"
     verde "   Listas."
 }
 
-# ─────────────────────── 4. comando rescatemtk ───────────────────────
+# ─────────────────────── 5. comando rescatemtk ───────────────────────
 
 crear_lanzador() {
-    azul "[4/5] Comando «rescatemtk»"
+    azul "[5/6] Comando «rescatemtk»"
     ejecutar mkdir -p "$BIN_LOCAL"
     if [ "$DRY_RUN" = "1" ]; then
-        printf '   [dry-run] crear %s\n' "$LANZADOR"
+        printf '   [dry-run] crear %s (usa %s)\n' "$LANZADOR" "$PY_VENV"
     else
         cat > "$LANZADOR" <<FIN
 #!/bin/sh
-exec python3 "$DIR_APP/main.py" "\$@"
+exec "$PY_VENV" "$DIR_APP/main.py" "\$@"
 FIN
         chmod +x "$LANZADOR"
     fi
@@ -124,10 +144,10 @@ FIN
     esac
 }
 
-# ─────────────────────── 5. lanzador del menú ───────────────────────
+# ─────────────────────── 6. lanzador del menú ───────────────────────
 
 crear_desktop() {
-    azul "[5/5] Lanzador del menú de aplicaciones"
+    azul "[6/6] Lanzador del menú de aplicaciones"
     ejecutar mkdir -p "$(dirname "$DESKTOP")"
 
     icono="utilities-terminal"
@@ -164,6 +184,7 @@ main() {
     azul "================================================"
 
     instalar_deps_sistema
+    crear_entorno_virtual
     instalar_mtkclient
     instalar_deps_app
     crear_lanzador

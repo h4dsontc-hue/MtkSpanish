@@ -84,19 +84,27 @@ Después, abre **RescateMTK** desde el menú o ejecuta `rescatemtk` en una termi
 
 ### A mano
 
+Las distros modernas no dejan instalar con `pip` en el sistema (PEP 668), así
+que todo lo de Python va a un entorno virtual (`.venv`). Se crea con
+`--system-site-packages` para que vea el `tkinter` del sistema.
+
 ```bash
 # 1. Dependencias del sistema (Debian / Ubuntu / Pop!_OS)
-sudo apt install python3-tk android-tools-adb android-tools-fastboot git
+sudo apt install python3-tk python3-venv android-tools-adb \
+    android-tools-fastboot git libusb-1.0-0
 
-# 2. MTKClient (el motor de rescate)
-git clone https://github.com/bkerler/mtkclient ~/mtkclient
-pip install -r ~/mtkclient/requirements.txt
-
-# 3. RescateMTK
+# 2. RescateMTK + entorno virtual
 git clone https://github.com/h4dsontc-hue/MtkSpanish
 cd MtkSpanish
-pip install -r requirements.txt
-python3 main.py
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install -r requirements.txt
+
+# 3. MTKClient (el motor de rescate), en el mismo entorno
+git clone https://github.com/bkerler/mtkclient ~/mtkclient
+.venv/bin/pip install -r ~/mtkclient/requirements.txt
+
+# 4. Arrancar
+.venv/bin/python3 main.py
 ```
 
 No hace falta `sudo` para lanzar la app: el primer paso del wizard pide la
