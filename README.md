@@ -26,7 +26,7 @@ Todas las herramientas de flasheo para MediaTek están en inglés y asumen conoc
 
 - ✅ Detección automática del modo del dispositivo (ADB / Fastboot / BROM)
 - ✅ Wizard paso a paso con interfaz gráfica
-- ✅ Diagnóstico de SBC/SLA/DAA (Secure Boot MediaTek) explicado en español
+- ✅ Bypass de SBC/DAA en chipsets vulnerables (vía los exploits de MTKClient) + diagnóstico en español
 - ✅ Búsqueda de firmware en mifirm.net (la descarga se abre en tu navegador)
 - ✅ Barra de progreso en tiempo real
 - ✅ Mensajes de error explicados en español humano
@@ -34,13 +34,18 @@ Todas las herramientas de flasheo para MediaTek están en inglés y asumen conoc
 - ✅ Compatible con Linux (Pop!_OS, Ubuntu, Mint, Arch...)
 
 > **Sobre el Secure Boot y las descargas, para que no haya sorpresas:**
-> la herramienta **detecta** si el móvil tiene SBC, DAA o SLA activados y te
-> explica qué significa, pero **no los salta**: un bootrom con SLA solo acepta
-> cargadores firmados por el fabricante, y sin ese fichero de autenticación no
-> hay rescate por BROM posible (la vía entonces es fastboot, si el bootloader
-> está desbloqueado). Y las descargas de mifirm.net se abren en tu navegador
-> porque esa web genera los enlaces con JavaScript ofuscado; descomprimes el
-> archivo y lo eliges en la pestaña «Ya lo tengo descargado».
+> MTKClient trae exploits del bootrom (kamakiri, carbonara...) que **sí saltan
+> SBC y DAA** en los chipsets que son vulnerables: cargan el DA sin firma y
+> permiten flashear aunque el Secure Boot esté activado. La app los lanza con
+> `mtk payload`, así que ese bypass ya está aquí. El límite es el hardware: en
+> chipsets nuevos con el bootrom parcheado y **SLA** activado no hay exploit
+> público, y ahí sí hace falta el fichero de autenticación del fabricante (o
+> tirar de fastboot, si el bootloader está desbloqueado). La herramienta te
+> **dice en cuál de los dos casos estás** con la comprobación de protecciones.
+>
+> Las descargas de mifirm.net se abren en tu navegador porque esa web genera
+> los enlaces con JavaScript ofuscado; descomprimes el archivo y lo eliges en
+> la pestaña «Ya lo tengo descargado».
 
 ---
 
