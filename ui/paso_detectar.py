@@ -152,7 +152,11 @@ class PasoDetectar(PasoBase):
     def _latido(self) -> None:
         """Reintento automático mientras no haya nada detectado."""
         self._tarea_auto = None
-        if self.wizard.indice != 1 or not self.variable_auto.get():
+        # Comparado contra el paso visible, no contra un índice fijo: así sigue
+        # funcionando si algún día se reordenan los pasos.
+        if self.wizard.pasos[self.wizard.indice] is not self:
+            return
+        if not self.variable_auto.get():
             return
         if self.estado.dispositivo is None and not self.buscando:
             self._detectar(silencioso=True)
