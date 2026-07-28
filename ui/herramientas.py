@@ -28,9 +28,14 @@ class VentanaHerramientas(ctk.CTkToplevel):
         self.wizard = wizard
         self.estado = wizard.estado
         self.operacion = None
+        self._vivo = True
 
         self.title("Herramientas avanzadas")
         self.geometry("760x620")
+        # Al cerrar la ventana hay que cortar cualquier operación en curso: si
+        # no, sus callbacks seguirían intentando escribir en widgets ya
+        # destruidos y llenarían la terminal de errores.
+        self.protocol("WM_DELETE_WINDOW", self._cerrar)
 
         dispositivo = self.estado.dispositivo
         modo = dispositivo.modo if dispositivo else ""
@@ -153,13 +158,30 @@ class VentanaHerramientas(ctk.CTkToplevel):
             return True
         return False
 
+    def _cerrar(self):
+        self._vivo = False
+        operacion = self.operacion
+        if operacion is not None and hasattr(operacion, "cancelar"):
+            try:
+                operacion.cancelar()
+            except Exception:
+                pass
+        self.destroy()
+
     def _log(self, linea, error=False):
+        # La ventana pudo cerrarse mientras un hilo aún tenía líneas en cola.
+        if not self._vivo:
+            return
         self.registro.escribir(linea, error=error or errores.es_linea_de_error(linea))
 
     def _progreso(self, porcentaje):
+        if not self._vivo:
+            return
         self.barra.set(max(0.0, min(porcentaje / 100.0, 1.0)))
 
     def _fase(self, texto):
+        if not self._vivo:
+            return
         self.etiqueta_fase.configure(text=texto)
 
     def _preparar_brom(self):

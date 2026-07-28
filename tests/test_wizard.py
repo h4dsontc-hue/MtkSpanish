@@ -589,6 +589,50 @@ class TestHerramientas:
         ventana = VentanaHerramientas(wizard)
         assert ventana is not None
 
+    def test_cerrar_la_ventana_cancela_la_operacion(self, wizard):
+        from ui.herramientas import VentanaHerramientas
+
+        wizard.estado.dispositivo = Dispositivo(modo=MODO_BROM, modelo="Redmi 9")
+        ventana = VentanaHerramientas(wizard)
+
+        cancelado = {"si": False}
+
+        class Op:
+            def cancelar(self):
+                cancelado["si"] = True
+
+        ventana.operacion = Op()
+        ventana._cerrar()
+        assert cancelado["si"] is True
+        assert ventana._vivo is False
+
+    def test_log_tras_cerrar_no_hace_nada(self, wizard):
+        # Es el crash que reportó el usuario: un hilo escribía en el registro
+        # después de cerrar la ventana.
+        from ui.herramientas import VentanaHerramientas
+
+        wizard.estado.dispositivo = Dispositivo(modo=MODO_BROM, modelo="Redmi 9")
+        ventana = VentanaHerramientas(wizard)
+        ventana._cerrar()
+        ventana._log("línea que llega tarde")  # no debe lanzar nada
+        ventana._progreso(50.0)
+        ventana._fase("algo")
+
+    def test_el_registro_aguanta_un_widget_destruido(self, wizard):
+        import tkinter
+
+        from ui.base import Registro
+
+        registro = Registro(wizard.contenedor)
+
+        def morir(*a, **k):
+            raise tkinter.TclError("el widget ya no existe")
+
+        registro.configure = morir
+        # No debe propagar la TclError.
+        registro.escribir("hola")
+        registro.limpiar()
+
     def test_el_boton_de_secure_boot_lanza_el_payload(self, wizard, monkeypatch):
         from core import mtk
         from ui.herramientas import VentanaHerramientas

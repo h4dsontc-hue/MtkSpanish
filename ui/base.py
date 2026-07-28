@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import customtkinter as ctk
+import tkinter
 
 # Paleta. Cada color es (claro, oscuro) para que funcione con los dos temas.
 VERDE = ("#1a7f37", "#2ea043")
@@ -162,16 +163,25 @@ class Registro(ctk.CTkTextbox):
         self.configure(state="disabled")
 
     def escribir(self, linea: str, error: bool = False) -> None:
-        self.configure(state="normal")
-        marca = "!! " if error else "   "
-        self.insert("end", f"{marca}{linea}\n")
-        self.see("end")
-        self.configure(state="disabled")
+        # Un hilo en segundo plano puede seguir mandando líneas justo después de
+        # que se cierre la ventana que contenía este registro. Escribir en un
+        # widget ya destruido lanza TclError; se ignora, porque es solo un log.
+        try:
+            self.configure(state="normal")
+            marca = "!! " if error else "   "
+            self.insert("end", f"{marca}{linea}\n")
+            self.see("end")
+            self.configure(state="disabled")
+        except tkinter.TclError:
+            pass
 
     def limpiar(self) -> None:
-        self.configure(state="normal")
-        self.delete("1.0", "end")
-        self.configure(state="disabled")
+        try:
+            self.configure(state="normal")
+            self.delete("1.0", "end")
+            self.configure(state="disabled")
+        except tkinter.TclError:
+            pass
 
     def volcar(self) -> str:
         return self.get("1.0", "end")
