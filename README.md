@@ -2,6 +2,16 @@
 
 **Herramienta de rescate y flasheo para dispositivos MediaTek — en español**
 
+![Sistema de rescate MediaTek: operativo](https://img.shields.io/badge/rescate%20MediaTek-operativo-brightgreen)
+![Tests](https://github.com/h4dsontc-hue/MtkSpanish/actions/workflows/tests.yml/badge.svg)
+![Licencia: GPLv3](https://img.shields.io/badge/licencia-GPLv3-blue)
+![Linux](https://img.shields.io/badge/Linux-Pop!__OS%20·%20Ubuntu%20·%20Arch-yellow)
+
+> ✅ **Sistema de rescate MediaTek operativo.** Detecta el móvil en modo
+> BROM/Preloader, se comunica con el bootrom mediante MTKClient (probado con
+> hardware real: lee el chipset y el SoC ID del dispositivo) y reinstala el
+> firmware paso a paso.
+
 MtkSpanish es un wizard paso a paso diseñado para usuarios hispanohablantes que necesitan recuperar o flashear un teléfono con chip MediaTek (Xiaomi, Redmi, POCO, etc.) sin tener conocimientos técnicos.
 
 ---
